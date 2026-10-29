@@ -7,7 +7,19 @@ VLM Analysis, Parameter Experimentation, and Live Evaluation Suite.
 import streamlit as st
 import os
 import json
-import pandas as pd
+def render_markdown_table(data_list, columns, col_names=None):
+    """Renders a pure markdown table without requiring compiled pandas DLLs."""
+    display_names = col_names or columns
+    header = "| " + " | ".join(display_names) + " |"
+    sep = "| " + " | ".join(["---"] * len(columns)) + " |"
+    rows = []
+    for item in data_list:
+        row_cells = []
+        for c in columns:
+            val = str(item.get(c, "")).replace("\n", " ").replace("|", "/")
+            row_cells.append(val)
+        rows.append("| " + " | ".join(row_cells) + " |")
+    return "\n".join([header, sep] + rows)
 from core.multimodal_assistant import CampusAssistant
 from core.evaluator import CampusEvaluator
 
@@ -341,16 +353,24 @@ with tab_eval:
         m_col4.metric("Median Latency", f"{metrics['median_latency_ms']} ms")
 
         st.markdown("#### 📋 Test Case Detailed Audit:")
-        df_cases = pd.DataFrame(cases)
-        st.dataframe(df_cases, use_container_width=True)
+        cases_md = render_markdown_table(
+            cases,
+            columns=["test_id", "query", "type", "correct", "latency_ms", "notes"],
+            col_names=["Test ID", "Query", "Type", "Passed", "Latency (ms)", "Audit Notes"]
+        )
+        st.markdown(cases_md)
 
     st.markdown("---")
     st.markdown("### 🔬 Ablation Studies (A1 to A8 Comparison)")
     st.caption("Formal evaluation isolating each component to demonstrate its independent contribution.")
 
     ablations = evaluator.run_ablations()
-    df_ab = pd.DataFrame(ablations)[["id", "name", "baseline", "comparison", "baseline_score", "comparison_score", "key_finding"]]
-    st.dataframe(df_ab, use_container_width=True)
+    ab_md = render_markdown_table(
+        ablations,
+        columns=["id", "name", "baseline_score", "comparison_score", "key_finding"],
+        col_names=["ID", "Experiment", "Baseline Score", "Proposed Architecture", "Key Scientific Finding"]
+    )
+    st.markdown(ab_md)
 
 # ----------------- TAB 5: EVALUATOR DEFENSE GUIDE -----------------
 with tab_defense:
