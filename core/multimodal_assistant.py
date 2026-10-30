@@ -53,7 +53,7 @@ class CampusAssistant:
         self.conversation_history: List[Dict[str, str]] = []
 
     def classify_intent(self, query: str, has_image: bool = False) -> str:
-        """Classifies query intent into NAV, RAG, CLIP_SEARCH, VLM, GEN_ILLUSTRATION, or MIXED."""
+        """Classifies query intent into NAV, RAG, CLIP_SEARCH, VLM, GEN_ILLUSTRATION, NEAREST, or MIXED."""
         q = query.lower()
 
         # 1. User wants an illustrative scene or image generation
@@ -64,11 +64,15 @@ class CampusAssistant:
         # 2. Navigation keywords
         nav_triggers = ["how do i reach", "how to reach", "how to go", "how do i go", "guide me to", "directions to", "route to", "way to"]
 
-        # 3. If an image is active and user asks for navigation -> MIXED
+        # 3. If user asks for nearest locations / landmarks
+        if any(w in q for w in ["nearest", "nearby", "near me", "close to me", "around here", "locate nearest", "what is near"]):
+            return "NEAREST"
+
+        # 4. If an image is active and user asks for navigation -> MIXED
         if has_image and any(t in q for t in nav_triggers):
             return "MIXED"
 
-        # 4. If an image is active and user asks questions about it or follow-ups -> VLM_ANALYSIS
+        # 5. If an image is active and user asks questions about it or follow-ups -> VLM_ANALYSIS
         vlm_triggers = ["sign", "visible", "photo", "picture", "this place", "what is this", "where is this", "identify", "door", "entrance", "floor", "notice", "plaque", "board", "counter", "atm", "room", "building", "corridor"]
         if has_image:
             if any(t in q for t in vlm_triggers) or q.strip() in ["", "where am i", "identify this", "what is this", "read signs"]:
@@ -79,15 +83,15 @@ class CampusAssistant:
             if not any(t in q for t in ["food stall", "canteen", "course", "fee", "timing", "admission", "sports area"]):
                 return "VLM_ANALYSIS"
 
-        # 5. Image search request without an active image
+        # 6. Image search request without an active image
         if ("photo of" in q or "picture of" in q or "resemble" in q or "look like" in q) and not any(t in q for t in gen_triggers):
             return "CLIP_SEARCH"
 
-        # 6. Text Navigation request
+        # 7. Text Navigation request
         if any(t in q for t in nav_triggers) or re.search(r'\bi am (in|at|near)\b', q):
             return "NAV"
 
-        # 7. Default to Grounded Text RAG
+        # 8. Default to Grounded Text RAG
         return "RAG"
 
     def extract_navigation_entities(self, query: str) -> Tuple[Optional[str], Optional[str]]:
@@ -264,21 +268,18 @@ class CampusAssistant:
             response_payload["vlm_result"] = vlm_res
             matched_loc = vlm_res.get("catalogue_matched_location", "ADMISSION_BLOCK")
             self.session_source = matched_loc
+            response_payload["source_location"] = matched_loc
 
-            # Extract nearest landmarks from campus graph
-            nearest_landmarks = []
-            if matched_loc in self.nav_graph.graph:
-                for n in self.nav_graph.graph.neighbors(matched_loc):
-                    edge_data = self.nav_graph.graph.get_edge_data(matched_loc, n) or {}
-                    lmark = edge_data.get("landmark")
-                    n_name = self.nav_graph.graph.nodes[n].get("name", n)
-                    if lmark:
-                        nearest_landmarks.append(f"{n_name} (*{lmark}*)")
-                    else:
-                        nearest_landmarks.append(n_name)
+            # Extract nearest real campus locations
+            nearest_items = self.nav_graph.get_nearest_locations(matched_loc, count=5)
+            response_payload["nearest_locations"] = nearest_items
+            nearest_lines = []
+            for item in nearest_items:
+                floor_tag = f" ({item['floor']})" if item['floor'] != "Ground" else ""
+                nearest_lines.append(f"  • **{item['name']}**{floor_tag} — *{item['type'].capitalize()}*")
+            landmarks_str = "\n".join(nearest_lines) if nearest_lines else "  • Central campus concourse"
 
             loc_name = self.nav_graph.graph.nodes.get(matched_loc, {}).get("name", vlm_res.get("matched_location_name", matched_loc))
-            landmarks_str = "\n".join([f"  • {lm}" for lm in nearest_landmarks[:4]]) if nearest_landmarks else "  • Central campus walkway"
 
             # Check if user specifically asked about signs or landmarks
             q_low = query.lower()
@@ -288,9 +289,11 @@ class CampusAssistant:
                     f"🏷️ **Visible Signage in Photo:** {signs_list}",
                     "",
                     f"📍 **Identified Location:** **{loc_name}**",
-                    f"🏛️ **Nearest Landmarks:** {', '.join([lm.split('(')[0].strip() for lm in nearest_landmarks[:3]])}",
                     "",
-                    f"💡 *Ask me any follow-up question or request directions to any building!*"
+                    f"🧭 **Nearest Locations Around Here:**",
+                    f"{landmarks_str}",
+                    "",
+                    f"💡 *Starting location set to **{loc_name}**. Ask me any follow-up question or say 'Guide me to...' to navigate!*"
                 ]
             else:
                 ans_lines = [
@@ -300,12 +303,40 @@ class CampusAssistant:
                     "",
                     f"🏷️ **Visible Signage:** {', '.join(vlm_res['ocr_detected'])}",
                     "",
-                    f"🏛️ **Nearest Landmarks & Accessible Paths:**",
+                    f"🧭 **Nearest Locations & Accessible Walkways:**",
                     f"{landmarks_str}",
                     "",
-                    f"💡 *Starting point set to **{loc_name}**. Ask any follow-up question or say 'Guide me to...' to navigate!*"
+                    f"💡 *Starting location set to **{loc_name}**. Ask any follow-up question or say 'Guide me to [Destination]' to navigate!*"
                 ]
             response_payload["answer"] = "\n".join(ans_lines)
+            return response_payload
+
+        # Branch 3b: Nearest Locations Spatial Query
+        elif intent == "NEAREST":
+            target_source = self.session_source or "FOUNTAIN"
+            if uploaded_image:
+                vlm_res = self.vlm_engine.analyze_image_query(uploaded_image, query, api_key=api_key)
+                target_source = vlm_res.get("catalogue_matched_location", target_source)
+                self.session_source = target_source
+
+            src_name = self.nav_graph.graph.nodes.get(target_source, {}).get("name", target_source)
+            nearest_items = self.nav_graph.get_nearest_locations(target_source, count=5)
+            response_payload["nearest_locations"] = nearest_items
+            response_payload["source_location"] = target_source
+
+            lines = [
+                f"📍 **Current Location in Focus:** **{src_name}**",
+                "",
+                "🧭 **Nearest Campus Locations & Facilities:**"
+            ]
+            for idx, item in enumerate(nearest_items, 1):
+                floor_tag = f" ({item['floor']})" if item['floor'] != "Ground" else ""
+                type_tag = f" — *{item['type'].capitalize()}*"
+                lines.append(f"{idx}. **{item['name']}**{floor_tag}{type_tag}")
+            
+            lines.append("")
+            lines.append("💡 *To navigate to any of these, simply ask 'Guide me to [Location Name]'!*")
+            response_payload["answer"] = "\n".join(lines)
             return response_payload
 
         # Branch 4: Visual Scene Generation (Diffusion Model)

@@ -1,7 +1,8 @@
 """
 CampusDrive — Presidency AI Campus Assistant
-Clean, unified multimodal campus guide with interactive 2D route map,
-semantic text Q&A, Google Gemini vision analysis, and illustrative visual generation.
+Unified multimodal campus guide with interactive 2D route map,
+semantic text Q&A, Google Gemini vision analysis, nearest-location discovery,
+and illustrative visual generation.
 """
 
 import os
@@ -29,15 +30,34 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* Force clean light theme and high-contrast dark text universally */
-html, body, [class*="css"], .stApp {
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
+/* Force clean light theme and CSS variables universally regardless of system dark mode */
+:root, [data-theme="dark"], [data-theme="light"], .stApp {
+    --background-color: #F8FAFC !important;
+    --secondary-background-color: #FFFFFF !important;
+    --text-color: #0F172A !important;
+    --primary-color: #2563EB !important;
+    color-scheme: light !important;
+}
+
+html, body, [class*="css"], .stApp, .main, [data-testid="stAppViewContainer"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     background-color: #F8FAFC !important;
     color: #0F172A !important;
 }
 
+/* Force light background on all Streamlit containers */
+[data-testid="stAppViewContainer"] > section,
+[data-testid="stMain"],
+[data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"],
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div {
+    background-color: #F8FAFC !important;
+}
+
 /* Ensure ALL markdown, paragraphs, headings, list items are 100% visible */
-p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6, .stMarkdown li, .stMarkdown strong {
+p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6, .stMarkdown li, .stMarkdown strong, .stMarkdown em,
+[data-testid="stWidgetLabel"] label, [data-testid="stWidgetLabel"] span {
     color: #0F172A !important;
     font-weight: 500;
 }
@@ -79,11 +99,11 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
 [data-testid="stChatMessage"] {
     background-color: #FFFFFF !important;
     color: #0F172A !important;
-    border: 1px solid #E2E8F0 !important;
+    border: 1px solid #CBD5E1 !important;
     border-radius: 12px !important;
     padding: 14px 16px !important;
     margin-bottom: 10px !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
 }
 [data-testid="stChatMessage"] * {
     color: #0F172A !important;
@@ -98,9 +118,9 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
 .step-box {
     background: #FFFFFF !important;
     border-left: 5px solid #10B981 !important;
-    border-top: 1px solid #E2E8F0 !important;
-    border-right: 1px solid #E2E8F0 !important;
-    border-bottom: 1px solid #E2E8F0 !important;
+    border-top: 1px solid #CBD5E1 !important;
+    border-right: 1px solid #CBD5E1 !important;
+    border-bottom: 1px solid #CBD5E1 !important;
     padding: 12px 16px !important;
     border-radius: 0 8px 8px 0 !important;
     margin-bottom: 8px !important;
@@ -127,30 +147,44 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
     margin-top: 4px !important;
 }
 
-/* Active Image Context Banner */
-.active-photo-card {
-    background: #EFF6FF;
-    border: 1px solid #BFDBFE;
-    border-radius: 10px;
-    padding: 10px 14px;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+/* Quick Action Cards */
+.nearest-card {
+    background: #FFFFFF !important;
+    border: 1.5px solid #CBD5E1 !important;
+    border-radius: 10px !important;
+    padding: 10px 14px !important;
+    margin-bottom: 8px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
 }
 
-/* OVERRIDE ALL DARK/BLACK WIDGET BOXES */
+/* OVERRIDE ALL DARK/BLACK WIDGET BOXES (Dropdowns, Inputs, Popovers) */
+div[data-testid="stSelectbox"],
+div[data-testid="stSelectbox"] > div,
+div[data-baseweb="select"],
 div[data-baseweb="select"] > div,
+div[data-baseweb="select"] div,
 div[data-baseweb="select"] input,
 div[data-baseweb="select"] span {
     background-color: #FFFFFF !important;
     color: #0F172A !important;
-    border: 1px solid #CBD5E1 !important;
-    border-radius: 8px !important;
 }
-div[data-baseweb="popover"] div,
+div[data-baseweb="select"] > div {
+    border: 1.5px solid #94A3B8 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+}
+div[data-baseweb="select"] svg {
+    fill: #0F172A !important;
+}
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
 div[data-baseweb="popover"] ul,
-div[data-baseweb="popover"] li {
+div[data-baseweb="popover"] li,
+div[data-baseweb="popover"] span,
+ul[role="listbox"],
+li[role="option"] {
     background-color: #FFFFFF !important;
     color: #0F172A !important;
 }
@@ -159,181 +193,354 @@ li[role="option"]:hover, li[aria-selected="true"] {
     color: #1D4ED8 !important;
 }
 
-/* File Uploader styling */
-[data-testid="stFileUploader"] {
+/* Text Inputs (API Key, etc.) */
+[data-testid="stTextInput"],
+[data-testid="stTextInput"] > div,
+[data-testid="stTextInput"] input,
+div[data-baseweb="input"],
+div[data-baseweb="input"] > div,
+div[data-baseweb="input"] input,
+div[data-baseweb="base-input"],
+div[data-baseweb="base-input"] > div,
+div[data-baseweb="base-input"] input {
     background-color: #FFFFFF !important;
-    border: 2px dashed #93C5FD !important;
+    color: #0F172A !important;
+}
+[data-testid="stTextInput"] input,
+div[data-baseweb="input"] > div {
+    border: 1.5px solid #94A3B8 !important;
+    border-radius: 8px !important;
+}
+
+/* File Uploader Dropzone and Children */
+[data-testid="stFileUploader"],
+[data-testid="stFileUploader"] > section,
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stFileUploaderDropzone"] > div,
+[data-testid="stFileUploaderDropzone"] div,
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploaderDropzone"] small,
+section[data-testid="stFileUploadDropzone"],
+section[data-testid="stFileUploadDropzone"] div,
+section[data-testid="stFileUploadDropzone"] span,
+section[data-testid="stFileUploadDropzone"] small {
+    background-color: #FFFFFF !important;
+    color: #1E293B !important;
+}
+[data-testid="stFileUploaderDropzone"],
+section[data-testid="stFileUploadDropzone"] {
+    border: 2px dashed #3B82F6 !important;
     border-radius: 12px !important;
-    padding: 12px !important;
+    padding: 16px !important;
 }
-[data-testid="stFileUploader"] section {
-    background-color: #F8FAFC !important;
+[data-testid="stFileUploader"] button,
+[data-testid="stFileUploaderDropzone"] button,
+section[data-testid="stFileUploadDropzone"] button {
+    background: #EFF6FF !important;
+    background-color: #EFF6FF !important;
+    color: #1D4ED8 !important;
+    border: 1.5px solid #93C5FD !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
 }
-[data-testid="stFileUploader"] section * {
-    color: #334155 !important;
+[data-testid="stFileUploader"] button:hover,
+[data-testid="stFileUploaderDropzone"] button:hover,
+section[data-testid="stFileUploadDropzone"] button:hover {
+    background: #DBEAFE !important;
+    background-color: #DBEAFE !important;
+    color: #1E40AF !important;
 }
 
 /* Chat Input Bar */
-[data-testid="stChatInput"] {
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInputContainer"],
+[data-testid="stChatInputContainer"] > div,
+[data-testid="stChatInput"] textarea,
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div {
     background-color: #FFFFFF !important;
-    border: 1.5px solid #CBD5E1 !important;
+    color: #0F172A !important;
+}
+[data-testid="stChatInput"] {
+    border: 2px solid #94A3B8 !important;
     border-radius: 14px !important;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06) !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
 }
 [data-testid="stChatInput"] textarea {
     background-color: #FFFFFF !important;
     color: #0F172A !important;
-    font-size: 0.95rem !important;
+    font-size: 0.96rem !important;
 }
 [data-testid="stChatInput"] textarea::placeholder {
     color: #64748B !important;
 }
-
-/* Buttons */
-button[kind="primary"] {
-    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+[data-testid="stChatInput"] button {
+    background: #2563EB !important;
+    background-color: #2563EB !important;
     color: #FFFFFF !important;
     border: none !important;
     border-radius: 8px !important;
-    font-weight: 600 !important;
 }
+[data-testid="stChatInput"] button svg {
+    fill: #FFFFFF !important;
+    stroke: #FFFFFF !important;
+}
+
+/* Buttons (Primary & Secondary) */
+.stButton button,
+button,
+button[data-testid="baseButton-secondary"],
 button[kind="secondary"] {
+    background: #FFFFFF !important;
     background-color: #FFFFFF !important;
-    color: #1E293B !important;
-    border: 1px solid #CBD5E1 !important;
+    color: #0F172A !important;
+    border: 1.5px solid #94A3B8 !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
 }
+.stButton button:hover,
+button:hover,
+button[data-testid="baseButton-secondary"]:hover,
 button[kind="secondary"]:hover {
+    background: #EFF6FF !important;
     background-color: #EFF6FF !important;
     color: #1D4ED8 !important;
-    border-color: #93C5FD !important;
+    border-color: #3B82F6 !important;
+}
+.stButton button[kind="primary"],
+button[data-testid="baseButton-primary"],
+button[kind="primary"] {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+    background-color: #2563EB !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25) !important;
+}
+.stButton button[kind="primary"] *,
+button[data-testid="baseButton-primary"] *,
+button[kind="primary"] * {
+    color: #FFFFFF !important;
 }
 
 /* Sidebar styling */
-[data-testid="stSidebar"] {
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div:first-child,
+[data-testid="stSidebarContent"],
+[data-testid="stSidebarUserContent"] {
     background-color: #F1F5F9 !important;
+    border-right: 1px solid #E2E8F0 !important;
 }
-[data-testid="stSidebar"] * {
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] div,
+[data-testid="stSidebar"] strong {
+    color: #0F172A !important;
+    font-weight: 600;
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+    background-color: #FFFFFF !important;
+    border: 1.5px solid #CBD5E1 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+}
+[data-testid="stExpander"] summary {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    font-weight: 600 !important;
+}
+[data-testid="stExpander"] summary:hover {
+    color: #2563EB !important;
+}
+[data-testid="stExpander"] > div[role="region"] {
+    background-color: #FFFFFF !important;
     color: #0F172A !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# CAMPUS SCHEMATIC GRAPH & 2D COORDINATES
-# Coordinates reflect campus spatial layout for interactive Plotly visualization.
+# UNIFIED CAMPUS 2D COORDINATES (ALL 64 LOCATIONS & WAYPOINTS INTEGRATED)
 # -----------------------------------------------------------------------------
 CAMPUS_COORDINATES = {
-    # Central Avenue & Landmarks
-    "University Entrance": (50, 4, "Entrance", "Ground", "Main campus entrance gateway"),
-    "FOUNTAIN": (50, 32, "Landmark", "Ground", "Central campus landmark & primary navigation anchor"),
-    "UDAYA_UPAHARA": (68, 32, "Food", "Ground", "First left turn from fountain; traditional snacks"),
-    
-    # Engineering & Admission Complex
-    "ENGINEERING_BLOCK": (44, 48, "Academic", "Ground", "Houses engineering faculties; connects internally to H-K & N-U"),
-    "ADMISSION_BLOCK": (58, 48, "Office", "Ground", "Administration and visitor reception; houses Registrar on 1st Floor"),
-    "REGISTRAR_OFFICE": (62, 50, "Office", "1st Floor", "Admission Block 1st floor; student records & admissions"),
-    "CONTROLLER_EXAMINATION": (56, 52, "Office", "Ground", "Examination and evaluation counters"),
-    
-    # Food Stalls
-    "FOOD_STALLS_ADMISSION": (44, 40, "Food", "Ground", "Opposite Admission Block: Subway, Hatti Kaapi, Aromas, Taj Delight"),
-    "SPORTS_AREA": (28, 28, "Sports", "Ground", "Basketball, volleyball, throwball, football courts, gym, sports room"),
-    "DOMINOS": (26, 40, "Food", "Ground", "Outdoor Domino's pizza outlet kiosk"),
-    
-    # D, E, F, L Academic Wings
-    "STATIONERY": (70, 50, "Services", "Ground", "Campus stationery and photocopy supplies near D Block"),
-    "D_BLOCK": (76, 54, "Academic", "Ground", "Academic block near stationery; 5th floor houses School of Design"),
-    "SCHOOL_OF_DESIGN": (76, 57, "Academic", "5th Floor", "School of Design studios on 5th floor of D Block"),
-    "E_BLOCK": (84, 64, "Academic", "Ground", "Left from D Block; E Block seminar hall & R&D Centre"),
-    "RD_CENTRE": (86, 65, "Research", "Ground & 1st Floor", "Research & Development Centre on ground & 1st floor of E Block"),
-    "F_BLOCK": (84, 72, "Academic", "Ground", "F Block seminar hall; directly connects to L Block"),
-    "L_BLOCK": (84, 82, "Academic", "Ground", "Ground floor School of Media Studies; 1st floor Dean's Office"),
-    "SCHOOL_OF_MEDIA_STUDIES": (88, 82, "Academic", "Ground", "Media Studies soundstages and TV Studio on L Block ground floor"),
-    "DEAN_OFFICE_L_BLOCK": (88, 85, "Office", "1st Floor", "Dean's Office on 1st floor of L Block"),
-    "FOOD_STALLS_L_BLOCK": (74, 82, "Food", "Ground", "Food arcade: V Mart, Crazy Cups, Hatti Kaapi, Lassi Area"),
-    
-    # Engineering Spine (H, J, K -> N, P, Q, R, S, U)
-    "H_BLOCK": (44, 58, "Academic", "Ground", "Internal corridor connection inside Engineering Block"),
-    "J_BLOCK": (44, 64, "Academic", "Ground", "Internal engineering corridor"),
-    "K_BLOCK": (44, 70, "Academic", "Ground", "Connecting passage towards N Block"),
-    "N_BLOCK": (52, 75, "Academic", "Ground", "Academic block connector"),
-    "P_BLOCK": (58, 80, "Academic", "Ground", "Academic block; food stalls accessible on right side"),
-    "Q_BLOCK": (58, 85, "Academic", "Ground", "Corridor connecting P and R blocks"),
-    "R_BLOCK": (58, 90, "Academic", "Ground", "Corridor connecting Q and S blocks"),
-    "S_BLOCK": (58, 95, "Academic", "Ground", "Academic block; 5th floor houses School of Law"),
-    "SCHOOL_OF_LAW": (62, 97, "Academic", "5th Floor", "School of Law faculty and moot court on 5th floor of S Block"),
-    "U_BLOCK": (58, 100, "Academic", "Ground", "Terminal academic block in southern spine"),
-    
-    # Campus Facilities & West Wing
-    "CENTRAL_LIBRARY": (35, 52, "Facility", "Ground & 1st", "Multi-storey campus library and reading halls"),
-    "CAFETERIA": (24, 52, "Food", "Ground", "Central student cafeteria concourse"),
-    "AUDITORIUM": (24, 62, "Facility", "Ground", "Grand campus auditorium and event amphitheater"),
-    "DEAN_OFFICE_MBA": (24, 70, "Office", "1st Floor", "Dean Office of MBA Department in Admin / Management complex"),
-    "AMPHITHEATER": (38, 44, "Landmark", "Ground", "Open-air amphitheater with landscaped lawn steps")
+    # 1. Main Entrance & Central Spine
+    "UNIVERSITY_ENTRANCE": (50, 4, "Entrance", "Ground", "Main campus entrance gate and palm avenue"),
+    "FOUNTAIN": (50, 26, "Landmark", "Ground", "Central campus fountain and primary orientation anchor"),
+    "JUNCTION_FOUNTAIN_RIGHT": (50, 32, "Junction", "Ground", "Avenue intersection turning right from fountain"),
+    "JUNCTION_FIRST_LEFT": (60, 32, "Junction", "Ground", "First avenue opening towards Udaya Upahar"),
+    "UDAYA_UPAHARA": (68, 30, "Food", "Ground", "Traditional breakfast, snacks, and dining outlet"),
+    "JUNCTION_SECOND_LEFT": (52, 42, "Junction", "Ground", "Avenue turnoff into Engineering Block portico"),
+
+    # 2. Engineering & Computer Labs Complex
+    "ENGINEERING_BLOCK": (44, 46, "Academic", "Ground", "Engineering faculties; internal concourse to H-K wings"),
+    "CIVIL_DEPARTMENT": (40, 50, "Academic", "Ground", "Department of Civil Engineering laboratories and classrooms"),
+    "COMPUTER_LAB": (38, 56, "Facility", "Ground", "Central university computer laboratory"),
+    "FULL_STACK_LAB": (40, 62, "Academic", "Ground", "Full Stack Development and software engineering lab"),
+    "AI_CENTRE_OF_EXCELLENCE": (44, 66, "Research", "Ground", "NVIDIA AI Centre of Excellence and research facilities"),
+    "VR_STUDIO": (48, 66, "Research", "Ground", "Virtual Reality & Immersive Computing studio"),
+
+    # 3. Admission / Administration Complex & Services
+    "ADMISSION_BLOCK": (58, 46, "Office", "Ground", "Administration and admissions reception atrium"),
+    "REGISTRAR_OFFICE": (62, 48, "Office", "1st Floor", "Office of the Registrar; admissions and student verification"),
+    "CONTROLLER_EXAMINATION": (56, 50, "Office", "Ground", "Office of Controller of Examination service counters"),
+    "DEAN_OFFICE_MBA": (54, 44, "Office", "1st Floor", "Dean Office of MBA Department in Admin block"),
+    "FEE_DEPARTMENT": (60, 44, "Office", "Ground", "Student fee payments and accounts counter"),
+    "OFFICE_INTERNATIONAL_AFFAIRS": (64, 46, "Office", "Ground", "Office of International Affairs and student relations"),
+    "CAMPUS_ATM": (64, 40, "Service", "Ground", "24/7 Automated Teller Machine kiosk"),
+
+    # 4. Food Stalls & Dining (Opposite Admin)
+    "FOOD_STALLS_ADMISSION": (46, 38, "Food", "Ground", "Food arcade opposite Admin Block: Subway, Hatti Kaapi, Aromas, Taj"),
+    "CAFE_FEASTO": (48, 36, "Food", "Ground", "Cafe Feasto fast-food and beverage stall"),
+    "HATTI_KAAPI": (44, 36, "Food", "Ground", "Hatti Kaapi traditional filter coffee kiosk"),
+
+    # 5. Sports Complex, Athletics & Domino's
+    "JUNCTION_SPORTS_PATH": (36, 32, "Junction", "Ground", "Path branching right towards sports complex"),
+    "SPORTS_AREA": (28, 28, "Sports", "Ground", "Basketball, volleyball, football courts and athletic ground"),
+    "INDOOR_GAMES": (24, 26, "Sports", "Ground", "Indoor table tennis tournament and board games hall"),
+    "GYM": (30, 24, "Sports", "Ground", "Campus student gymnasium and fitness centre"),
+    "DOMINOS": (28, 38, "Food", "Ground", "Outdoor Domino's Pizza kiosk"),
+
+    # 6. Central Library, DSA, Cafeteria & Auditorium (West Concourse)
+    "CENTRAL_LIBRARY": (34, 48, "Facility", "Ground & 1st", "Central University Library, digital reading rooms & archives"),
+    "CAFETERIA": (24, 50, "Food", "Ground", "Central student cafeteria dining hall"),
+    "AMPHITHEATER": (36, 42, "Landmark", "Ground", "Open-air landscaped lawn amphitheater"),
+    "AUDITORIUM": (24, 60, "Facility", "Ground", "Grand campus auditorium and convocation hall"),
+    "DSA_OFFICE": (32, 58, "Office", "Ground", "Directorate of Student Affairs (DSA) office"),
+    "MUSICAL_ROOM": (28, 62, "Facility", "Ground", "Cultural musical practice room under canopy"),
+    "MEDICAL_ROOM": (38, 52, "Service", "Ground", "Medical Room & Infirmary (Manipal Clinics)"),
+    "TRANSPORT_DEPARTMENT": (34, 44, "Office", "Ground", "Bus transport and commuting services office"),
+    "M_BLOCK": (36, 68, "Academic", "Ground", "M Block lecture halls and classrooms"),
+
+    # 7. D Block, School of Design & R&D Wing
+    "JUNCTION_STATIONERY": (66, 46, "Junction", "Ground", "Connecting walkway from Admin Block to D Block"),
+    "STATIONERY": (70, 48, "Service", "Ground", "Stationery, textbooks and photocopy supplies store"),
+    "D_BLOCK": (76, 52, "Academic", "Ground", "D Block academic entrance foyer"),
+    "SCHOOL_OF_DESIGN": (76, 56, "Academic", "5th Floor", "School of Design studios on 5th floor of D Block"),
+    "JUNCTION_D_LEFT": (78, 56, "Junction", "Ground", "West connector walkway from D Block to E Block"),
+    "E_BLOCK": (84, 62, "Academic", "Ground", "E Block seminar halls and academic wings"),
+    "RD_CENTRE": (86, 64, "Research", "Ground & 1st", "Research & Development Centre, robotics and AI labs"),
+    "F_BLOCK": (84, 70, "Academic", "Ground", "F Block seminar hall and lecture rooms"),
+
+    # 8. L Block, Media Studies & Food Arcade (East Spine)
+    "NEXUS_CORE": (80, 78, "Junction", "Ground", "Nexus Core central transition underpass and stairwell"),
+    "L_BLOCK": (84, 80, "Academic", "Ground", "L Block academic complex"),
+    "SCHOOL_OF_MEDIA_STUDIES": (88, 80, "Academic", "Ground", "School of Media Studies soundstages and TV Studio"),
+    "DEAN_OFFICE_L_BLOCK": (88, 84, "Office", "1st Floor", "Dean's Office on 1st floor of L Block"),
+    "DEAN_OFFICE_PSCS": (88, 87, "Office", "1st Floor", "Dean Office PSCS on 1st floor of L Block"),
+    "FOOD_STALLS_L_BLOCK": (74, 80, "Food", "Ground", "Food arcade near L Block: VJ Mart, Crazy Cups, Lassi House"),
+    "VJ_MART": (72, 78, "Food", "Ground", "VJ Mart grocery, beverages and student store"),
+    "CRAZY_CUPS": (74, 84, "Food", "Ground", "Crazy Cups beverage kiosk"),
+    "LASSI_HOUSE": (76, 82, "Food", "Ground", "Lassi House shakes and refreshments stall"),
+
+    # 9. Engineering Internal Concourse (H, J, K -> N, P, Q, R, S, U)
+    "H_BLOCK": (44, 54, "Academic", "Ground", "Internal corridor inside Engineering Block"),
+    "J_BLOCK": (44, 60, "Academic", "Ground", "Internal engineering academic corridor"),
+    "K_BLOCK": (44, 68, "Academic", "Ground", "Internal corridor connecting towards N Block"),
+    "N_BLOCK": (52, 72, "Academic", "Ground", "N Block academic wing and pedestrian connector"),
+    "P_BLOCK": (58, 78, "Academic", "Ground", "P Block classrooms and food pavilion access"),
+    "Q_BLOCK": (58, 84, "Academic", "Ground", "Q Block academic corridor"),
+    "R_BLOCK": (58, 88, "Academic", "Ground", "R Block covered walkway"),
+    "S_BLOCK": (58, 94, "Academic", "Ground", "S Block main academic entrance"),
+    "SCHOOL_OF_LAW": (62, 96, "Academic", "5th Floor", "School of Law faculty and moot court on 5th floor of S Block"),
+    "LAW_LIBRARY": (64, 96, "Facility", "5th Floor", "Specialized Law Library on 5th floor of S Block"),
+    "U_BLOCK": (58, 100, "Academic", "Ground", "Terminal academic block in south concourse")
 }
 
 # Domain Category Taxonomy for Sidebar Navigation
 DOMAIN_CATEGORIES = {
-    "🎓 Academic Blocks & Schools": [
-        ("D_BLOCK", "D Block (School of Design on 5th Floor)"),
+    "🎓 Academic Blocks & Faculties": [
+        ("D_BLOCK", "D Block (School of Design on Floor 5)"),
         ("SCHOOL_OF_DESIGN", "School of Design (D Block Floor 5)"),
-        ("S_BLOCK", "S Block (School of Law on 5th Floor)"),
+        ("S_BLOCK", "S Block (School of Law on Floor 5)"),
         ("SCHOOL_OF_LAW", "School of Law (S Block Floor 5)"),
-        ("ENGINEERING_BLOCK", "Engineering Block (H, J, K Wings)"),
+        ("LAW_LIBRARY", "Law Library (S Block Floor 5)"),
+        ("ENGINEERING_BLOCK", "Engineering Block"),
+        ("CIVIL_DEPARTMENT", "Department of Civil Engineering"),
+        ("COMPUTER_LAB", "Computer Laboratory"),
+        ("FULL_STACK_LAB", "Full Stack Development Lab"),
+        ("AI_CENTRE_OF_EXCELLENCE", "AI Centre of Excellence"),
+        ("VR_STUDIO", "VR Studio"),
         ("E_BLOCK", "E Block (R&D Centre)"),
+        ("RD_CENTRE", "Research & Development Centre"),
         ("F_BLOCK", "F Block (Seminar Hall)"),
-        ("L_BLOCK", "L Block (School of Media Studies & Dean Office)"),
-        ("SCHOOL_OF_MEDIA_STUDIES", "School of Media Studies / TV Studio"),
+        ("L_BLOCK", "L Block (Media Studies)"),
+        ("SCHOOL_OF_MEDIA_STUDIES", "School of Media Studies (TV Studio)"),
+        ("M_BLOCK", "M Block Classrooms"),
         ("N_BLOCK", "N Block"),
         ("P_BLOCK", "P Block"),
         ("Q_BLOCK", "Q Block"),
         ("R_BLOCK", "R Block"),
         ("U_BLOCK", "U Block")
     ],
-    "🏛️ Offices & Administration": [
-        ("ADMISSION_BLOCK", "Admission Block"),
-        ("REGISTRAR_OFFICE", "Office of the Registrar (Admission Block Floor 1)"),
+    "🏛️ Administration & Student Offices": [
+        ("ADMISSION_BLOCK", "Admission Block (Admin)"),
+        ("REGISTRAR_OFFICE", "Office of the Registrar (Floor 1)"),
         ("CONTROLLER_EXAMINATION", "Office of Controller of Examination"),
         ("DEAN_OFFICE_MBA", "Dean Office of MBA Department"),
-        ("DEAN_OFFICE_L_BLOCK", "Dean's Office (L Block Floor 1)")
+        ("FEE_DEPARTMENT", "Fee Department Counters"),
+        ("OFFICE_INTERNATIONAL_AFFAIRS", "Office of International Affairs"),
+        ("CAMPUS_ATM", "24/7 Campus ATM"),
+        ("DSA_OFFICE", "Directorate of Student Affairs (DSA)"),
+        ("TRANSPORT_DEPARTMENT", "Transport Department"),
+        ("DEAN_OFFICE_L_BLOCK", "Dean's Office (L Block Floor 1)"),
+        ("DEAN_OFFICE_PSCS", "Dean Office PSCS (L Block Floor 1)")
     ],
-    "☕ Food & Dining Outlets": [
-        ("FOOD_STALLS_ADMISSION", "Food Stalls (Subway, Hatti Kaapi, Aromas, Taj Delight)"),
-        ("FOOD_STALLS_L_BLOCK", "Food Arcade (V Mart, Crazy Cups, Lassi Area)"),
-        ("UDAYA_UPAHARA", "Udaya Upahara (First left from Fountain)"),
+    "☕ Food Courts & Dining Outlets": [
+        ("FOOD_STALLS_ADMISSION", "Food Stalls (Subway, Hatti Kaapi, Aromas, Taj)"),
+        ("CAFE_FEASTO", "Cafe Feasto"),
+        ("HATTI_KAAPI", "Hatti Kaapi"),
+        ("FOOD_STALLS_L_BLOCK", "Food Arcade (VJ Mart, Crazy Cups, Lassi House)"),
+        ("VJ_MART", "VJ Mart Store"),
+        ("CRAZY_CUPS", "Crazy Cups"),
+        ("LASSI_HOUSE", "Lassi House"),
+        ("UDAYA_UPAHARA", "Udaya Upahar"),
         ("CAFETERIA", "Central Cafeteria"),
         ("DOMINOS", "Domino's Pizza Outlet")
     ],
-    "🏀 Sports & Campus Facilities": [
-        ("SPORTS_AREA", "Sports Complex (Basketball, Volleyball, Football, Gym)"),
+    "🏀 Sports, Library & Landmarks": [
+        ("FOUNTAIN", "Campus Fountain"),
+        ("UNIVERSITY_ENTRANCE", "University Entrance Gate"),
+        ("SPORTS_AREA", "Sports Complex (Courts)"),
+        ("INDOOR_GAMES", "Indoor Games Hall"),
+        ("GYM", "Campus Fitness Gym"),
         ("CENTRAL_LIBRARY", "Central University Library"),
-        ("RD_CENTRE", "Research & Development (R&D) Centre"),
         ("AUDITORIUM", "Main Campus Auditorium"),
         ("AMPHITHEATER", "Open-Air Amphitheater"),
-        ("STATIONERY", "Stationery & Photocopy Store")
+        ("MUSICAL_ROOM", "Musical Practice Room"),
+        ("MEDICAL_ROOM", "Medical Infirmary (Manipal Clinics)"),
+        ("STATIONERY", "Stationery & Photocopy Shop"),
+        ("NEXUS_CORE", "Nexus Core Transition")
     ]
 }
 
-# Key landmark anchors displayed permanently without text overlap
+# Key landmark anchors displayed permanently with clean non-overlapping labels
 PRIMARY_LANDMARKS = {
-    "FOUNTAIN", "University Entrance", "ENGINEERING_BLOCK", "ADMISSION_BLOCK",
+    "FOUNTAIN", "UNIVERSITY_ENTRANCE", "ENGINEERING_BLOCK", "ADMISSION_BLOCK",
     "D_BLOCK", "SCHOOL_OF_DESIGN", "SCHOOL_OF_LAW", "SPORTS_AREA",
-    "CENTRAL_LIBRARY", "AUDITORIUM", "L_BLOCK", "RD_CENTRE", "FOOD_STALLS_ADMISSION"
+    "CENTRAL_LIBRARY", "AUDITORIUM", "L_BLOCK", "RD_CENTRE",
+    "FOOD_STALLS_ADMISSION", "DOMINOS", "UDAYA_UPAHARA"
 }
 
 # -----------------------------------------------------------------------------
-# PLOTLY INTERACTIVE MAP BUILDER (Clean, Non-Overlapping Labels)
+# PLOTLY SINGLE UNIFIED CAMPUS MAP BUILDER
 # -----------------------------------------------------------------------------
-def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_node=None, dest_node=None):
+def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_node=None, dest_node=None, nearest_nodes=None):
     """
-    Renders an interactive 2D schematic campus map using Plotly.
-    Displays clear, non-overlapping labels only for major landmarks and active route waypoints.
+    Renders the single unified 2D schematic campus map with Plotly.
+    Connects START and DESTINATION with an active route line and integrates all places.
     """
     active_route = active_route or []
+    nearest_nodes = nearest_nodes or []
     fig = go.Figure()
 
-    # 1. Background Walkable Paths (Slate Gray)
+    # 1. Background Walkable Campus Paths (Clean Slate Gray)
     for u, v in nav_graph.edges():
         if u in CAMPUS_COORDINATES and v in CAMPUS_COORDINATES:
             xu, yu, _, _, _ = CAMPUS_COORDINATES[u]
@@ -346,7 +553,7 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
                 showlegend=False
             ))
 
-    # 2. Highlighted Route Segments (Vibrant Emerald)
+    # 2. Highlighted Route Segments Connecting START to DESTINATION (Vibrant Emerald)
     if len(active_route) > 1:
         rx, ry = [], []
         route_hover_texts = []
@@ -367,21 +574,31 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
             hoverinfo="text"
         ))
 
-    # 3. Campus Location Nodes & Selective Labels
+    # 3. Campus Location Nodes & Selective Dynamic Labels
     xs, ys, display_labels, colors, sizes, hovers = [], [], [], [], [], []
     for node_id, (x, y, category, floor, desc) in CAMPUS_COORDINATES.items():
+        if node_id.startswith("JUNCTION_"):
+            # Internal junction dots
+            xs.append(x)
+            ys.append(y)
+            display_labels.append("")
+            colors.append("#CBD5E1")
+            sizes.append(5)
+            hovers.append(f"Walkway Junction")
+            continue
+
         xs.append(x)
         ys.append(y)
         clean_name = node_id.replace("_", " ")
         hovers.append(f"<b>{clean_name}</b><br>🏷️ Category: {category}<br>🏢 Floor: {floor}<br>📝 {desc}")
 
-        # Selective label logic to prevent visual text clumping
+        # Label & Color selection
         if node_id == start_node:
-            colors.append("#2563EB")  # Blue for Start
+            colors.append("#2563EB")  # Royal Blue for Start
             sizes.append(22)
             display_labels.append(f"📍 START: {clean_name}")
         elif node_id == dest_node:
-            colors.append("#DC2626")  # Red for Destination
+            colors.append("#DC2626")  # Crimson Red for Destination
             sizes.append(22)
             display_labels.append(f"🎯 DEST: {clean_name}")
         elif node_id in active_route:
@@ -389,14 +606,18 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
             sizes.append(15)
             step_idx = active_route.index(node_id) + 1
             display_labels.append(f"#{step_idx} {clean_name}")
+        elif node_id in nearest_nodes and not active_route:
+            colors.append("#0284C7")  # Cyan for Nearest Places around starting location
+            sizes.append(14)
+            display_labels.append(f"⭐ {clean_name}")
         elif node_id in PRIMARY_LANDMARKS:
             colors.append("#475569")  # Dark Slate for Primary Landmarks
-            sizes.append(12)
+            sizes.append(11)
             display_labels.append(clean_name)
         else:
-            colors.append("#94A3B8")  # Subtle Slate for intermediate dots
-            sizes.append(9)
-            display_labels.append("")  # Blank label prevents visual collisions
+            colors.append("#94A3B8")  # Subtle Slate for regular locations
+            sizes.append(8)
+            display_labels.append("")  # Blank label prevents visual clumping
 
     fig.add_trace(go.Scatter(
         x=xs, y=ys,
@@ -433,11 +654,9 @@ if "messages" not in st.session_state:
         {
             "role": "assistant",
             "content": "👋 Welcome to **CampusDrive**! I am your AI campus guide.\n\n"
-                       "You can:\n"
-                       "• **Ask campus questions:** buildings, floors, food stalls, faculties, and facilities.\n"
-                       "• **Get verified directions:** enter your starting point and destination for landmark guidance.\n"
-                       "• **Upload or choose a campus photo:** I will identify the building, read visible signs, show nearest landmarks, and let you ask follow-up questions.\n"
-                       "• **Request visual illustrations:** ask to generate an illustrative scene of any campus facility.",
+                       "• **Verified Turn-by-Turn Routes:** Pick or say your start and destination to connect them on the live map.\n"
+                       "• **Photo Recognition & Nearest Places:** Upload any campus photo or pick an official preset; I will identify the building, list the nearest facilities, and let you navigate or ask follow-ups.\n"
+                       "• **Campus Q&A:** Ask about departments, floors, food stalls, or request illustrative scenes.",
             "citations": ["[campus_directions.pdf, Page 1]"],
             "route_result": None,
             "generated_image": None
@@ -453,6 +672,9 @@ if "last_gen_image" not in st.session_state:
 if "active_image" not in st.session_state:
     st.session_state.active_image = None
 
+if "nearest_cache" not in st.session_state:
+    st.session_state.nearest_cache = []
+
 assistant = st.session_state.assistant
 
 # -----------------------------------------------------------------------------
@@ -460,16 +682,17 @@ assistant = st.session_state.assistant
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 Quick Route Planner")
-    st.caption("Select origin and destination to compute verified paths:")
+    st.caption("Select origin and destination to connect them on the map:")
 
-    node_keys = sorted(list(CAMPUS_COORDINATES.keys()))
-    start_default_idx = node_keys.index("FOUNTAIN") if "FOUNTAIN" in node_keys else 0
-    dest_default_idx = node_keys.index("SCHOOL_OF_LAW") if "SCHOOL_OF_LAW" in node_keys else 1
+    # Selectable real locations (excluding pure junctions)
+    navigable_keys = [k for k in sorted(list(CAMPUS_COORDINATES.keys())) if not k.startswith("JUNCTION_")]
+    start_default_idx = navigable_keys.index("FOUNTAIN") if "FOUNTAIN" in navigable_keys else 0
+    dest_default_idx = navigable_keys.index("SCHOOL_OF_LAW") if "SCHOOL_OF_LAW" in navigable_keys else 1
 
-    sb_start = st.selectbox("📍 Starting Point", options=node_keys, index=start_default_idx, format_func=lambda x: x.replace("_", " "))
-    sb_dest = st.selectbox("🎯 Destination", options=node_keys, index=dest_default_idx, format_func=lambda x: x.replace("_", " "))
+    sb_start = st.selectbox("📍 Starting Point", options=navigable_keys, index=start_default_idx, format_func=lambda x: x.replace("_", " "))
+    sb_dest = st.selectbox("🎯 Destination", options=navigable_keys, index=dest_default_idx, format_func=lambda x: x.replace("_", " "))
 
-    if st.button("🚀 Calculate Verified Route", type="primary", use_container_width=True):
+    if st.button("🚀 Connect & Calculate Route", type="primary", use_container_width=True):
         route_calc = assistant.nav_graph.get_route(sb_start, sb_dest)
         st.session_state.last_route = route_calc
         assistant.session_source = sb_start
@@ -530,6 +753,7 @@ with st.sidebar:
     if st.button("🔄 New Conversation", use_container_width=True):
         assistant.session_source = None
         st.session_state.active_image = None
+        st.session_state.nearest_cache = []
         st.session_state.messages = st.session_state.messages[:1]
         st.session_state.last_route = None
         st.session_state.last_gen_image = None
@@ -541,9 +765,9 @@ with st.sidebar:
 st.markdown("""
 <div class="hero-header">
     <div class="hero-title">🧭 CampusDrive</div>
-    <div class="hero-sub">Intelligent Campus Guide • Verified Landmark Navigation • Multimodal Vision Assistant</div>
+    <div class="hero-sub">Unified Campus Navigation • Photo Recognition & Nearest Location Discovery • Verified Landmark Paths</div>
     <div>
-        <span class="badge-nav">🚶 Verified Navigation</span>
+        <span class="badge-nav">🚶 Single Unified Map</span>
         <span class="badge-vlm">👁️ Multimodal Vision</span>
         <span class="badge-rag">📄 Grounded Campus Facts</span>
     </div>
@@ -560,7 +784,7 @@ with col_chat:
     st.markdown("#### 💬 CampusDrive Assistant")
 
     # Quick prompt pills
-    st.caption("💡 Suggested questions:")
+    st.caption("💡 Quick actions to try:")
     qp_cols = st.columns(3)
     with qp_cols[0]:
         if st.button("Floor of Design?", use_container_width=True):
@@ -569,42 +793,43 @@ with col_chat:
         if st.button("Fountain ➔ Law", use_container_width=True):
             st.session_state.active_query = "From the fountain, guide me to the School of Law using landmarks."
     with qp_cols[2]:
-        if st.button("Entrance Visual", use_container_width=True):
-            st.session_state.active_query = "Generate an illustration of the campus entrance"
+        if st.button("What is near me?", use_container_width=True):
+            st.session_state.active_query = "What locations and facilities are nearest to my current position?"
 
     # Chat Messages Scroll Area
-    chat_container = st.container(height=450)
+    chat_container = st.container(height=430)
     with chat_container:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 if msg.get("uploaded_image") and os.path.exists(msg["uploaded_image"]):
-                    st.image(msg["uploaded_image"], caption=f"📷 {os.path.basename(msg['uploaded_image'])}", width=260)
+                    st.image(msg["uploaded_image"], caption=f"📷 {os.path.basename(msg['uploaded_image'])}", width=250)
                 st.markdown(msg["content"])
                 if msg.get("citations"):
                     st.markdown(" ".join([f"<span class='citation-pill'>{c}</span>" for c in msg["citations"]]), unsafe_allow_html=True)
                 if msg.get("generated_image") and os.path.exists(msg["generated_image"]):
                     st.image(msg["generated_image"], caption="🎨 Illustrative Visual Aid", use_container_width=True)
 
-    # ACTIVE IMAGE BANNER & MULTIMODAL FOLLOW-UP CONTROLS
+    # ACTIVE IMAGE FOCUS BANNER
     if st.session_state.active_image and os.path.exists(st.session_state.active_image):
         with st.container():
             st.markdown("""
             <div style="background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px;">
                 <span style="font-weight: 700; color: #1D4ED8;">🖼️ Active Photo in Focus:</span>
-                <span style="color: #1E293B; font-weight: 500;">Ask any follow-up questions about visible signs, doors, floors, or navigate from here!</span>
+                <span style="color: #1E293B; font-weight: 500;">Ask follow-ups about signs, doors, nearest locations, or navigate from here!</span>
             </div>
             """, unsafe_allow_html=True)
             col_act1, col_act2, col_act3 = st.columns([2, 5, 3])
             with col_act1:
                 st.image(st.session_state.active_image, width=70)
             with col_act2:
-                st.markdown(f"**Focus:** `{os.path.basename(st.session_state.active_image)}`")
+                st.markdown(f"**Photo:** `{os.path.basename(st.session_state.active_image)}`")
                 if assistant.session_source:
                     loc_label = assistant.nav_graph.graph.nodes.get(assistant.session_source, {}).get("name", assistant.session_source)
-                    st.caption(f"📍 Location set to: **{loc_label}**")
+                    st.caption(f"📍 Set as START: **{loc_label}**")
             with col_act3:
-                if st.button("❌ Remove Photo", use_container_width=True, help="Switch back to text-only mode"):
+                if st.button("❌ Clear Photo", use_container_width=True):
                     st.session_state.active_image = None
+                    st.session_state.nearest_cache = []
                     st.rerun()
 
     # Image Input Section: File Uploader or Preset Selection
@@ -619,7 +844,9 @@ with col_chat:
         "☕ Udaya Upahar (Snacks Landmark)": "data/sample_images/udaya_upahar.jpg",
         "🔬 AI Centre of Excellence": "data/sample_images/ai_centre_of_excellence.jpg",
         "🏀 Indoor Games Hall": "data/sample_images/indoor_games.jpg",
-        "🎬 School of Media Studies (TV Studio)": "data/sample_images/media_studies.jpg"
+        "🎬 School of Media Studies (TV Studio)": "data/sample_images/media_studies.jpg",
+        "💪 Campus Fitness Gym": "data/sample_images/gym.jpg",
+        "🏧 24/7 Campus ATM": "data/sample_images/campus_atm.jpg"
     }
 
     with st.expander("📷 Upload a Photo or Pick a Campus Landmark Photo", expanded=(st.session_state.active_image is None)):
@@ -638,8 +865,6 @@ with col_chat:
 
         if new_image_path and os.path.exists(new_image_path) and new_image_path != st.session_state.active_image:
             st.session_state.active_image = new_image_path
-            st.success(f"Loaded: {os.path.basename(new_image_path)}")
-            # Trigger immediate analysis
             st.session_state.active_query = "Identify this campus photo, read any visible signage, and tell me the nearest landmarks."
             st.rerun()
 
@@ -667,6 +892,10 @@ with col_chat:
                 api_key=st.session_state.get("gemini_api_key")
             )
 
+        if resp.get("source_location"):
+            assistant.session_source = resp["source_location"]
+        if resp.get("nearest_locations"):
+            st.session_state.nearest_cache = resp["nearest_locations"]
         if resp.get("route_result"):
             st.session_state.last_route = resp["route_result"]
         if resp.get("generated_image_path"):
@@ -681,11 +910,11 @@ with col_chat:
         })
         st.rerun()
 
-# ==================== RIGHT COLUMN: OUTPUT WINDOW & VISUALS ====================
+# ==================== RIGHT COLUMN: SINGLE UNIFIED MAP & NEAREST LOCATIONS ====================
 with col_output:
-    st.markdown("#### 🗺️ Interactive Campus Map & Guidance")
+    st.markdown("#### 🗺️ Unified Campus Map & Location Navigator")
 
-    # Render Interactive Plotly Campus Map
+    # Determine Active Route, Start & Destination on the Single Unified Map
     active_route_nodes = []
     start_point = assistant.session_source
     dest_point = None
@@ -695,31 +924,64 @@ with col_output:
         start_point = st.session_state.last_route.get("source")
         dest_point = st.session_state.last_route.get("destination")
 
+    # Cache of nearest nodes around start_point
+    nearest_node_ids = []
+    if start_point:
+        if not st.session_state.nearest_cache:
+            st.session_state.nearest_cache = assistant.nav_graph.get_nearest_locations(start_point, count=5)
+        nearest_node_ids = [item["node_id"] for item in st.session_state.nearest_cache]
+
+    # Render Single Unified Interactive Plotly Map
     plotly_fig = make_interactive_campus_map(
         assistant.nav_graph.graph,
         active_route=active_route_nodes,
         start_node=start_point,
-        dest_node=dest_point
+        dest_node=dest_point,
+        nearest_nodes=nearest_node_ids
     )
     st.plotly_chart(plotly_fig, use_container_width=True, config={"displayModeBar": False})
 
-    # Output Card 1: Turn-by-Turn Guidance if route is active (Distance removed)
+    # ACTION CARD 1: Route Connected Steps (When START and DESTINATION are connected)
     if st.session_state.last_route and st.session_state.last_route.get("success"):
         r_data = st.session_state.last_route
         with st.container():
-            st.markdown("##### 🚶 Verified Route Guidance")
+            st.markdown(f"##### 🚶 Connected Route ({len(r_data.get('steps', []))} verified path segments)")
             for s in r_data.get("steps", []):
                 landmark_info = f" • *Landmark: {s['landmark']}*" if s.get('landmark') else ""
                 vertical_info = " 🛗 [Elevator/Stairs]" if s.get('is_vertical') else ""
                 st.markdown(f"<div class='step-box'><b>Step {s['step_number']}:</b> {s['instruction']}{landmark_info}{vertical_info}</div>", unsafe_allow_html=True)
 
-    # Output Card 2: Generated Visual Aid if available
-    elif st.session_state.last_gen_image and os.path.exists(st.session_state.last_gen_image):
+    # ACTION CARD 2: Nearest Locations from Photo / Starting Position (Instant 1-Click Navigation)
+    elif start_point:
+        current_loc_name = assistant.nav_graph.graph.nodes.get(start_point, {}).get("name", start_point)
         with st.container():
-            st.markdown("##### 🎨 Campus Illustration")
-            st.image(st.session_state.last_gen_image, caption="⚠️ Illustrative Conceptual Visual Aid — Not Verified Route Geometry", use_container_width=True)
+            st.markdown(f"##### 🧭 Nearest Locations from **{current_loc_name}**")
+            st.caption("Click 'Route ➔' to connect your current position to any nearby facility on the map:")
+            
+            nearest_list = st.session_state.nearest_cache or assistant.nav_graph.get_nearest_locations(start_point, count=4)
+            for item in nearest_list[:4]:
+                col_n1, col_n2 = st.columns([7, 3])
+                with col_n1:
+                    floor_txt = f" ({item['floor']})" if item['floor'] != "Ground" else ""
+                    st.markdown(f"**{item['name']}**{floor_txt} • *{item['type'].capitalize()}*")
+                with col_n2:
+                    if st.button("Route ➔", key=f"btn_near_{item['node_id']}", help=f"Connect on map"):
+                        route_calc = assistant.nav_graph.get_route(start_point, item["node_id"])
+                        st.session_state.last_route = route_calc
+                        st.session_state.messages.append({
+                            "role": "user",
+                            "content": f"Guide me to {item['name']} from {current_loc_name}"
+                        })
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": assistant.nav_graph.generate_natural_directions(route_calc),
+                            "citations": ["[campus_directions.pdf]"],
+                            "route_result": route_calc,
+                            "generated_image": None
+                        })
+                        st.rerun()
 
-    # Output Card 3: Default Campus Directory Overview
+    # ACTION CARD 3: Default Campus Directory Overview
     else:
         with st.container():
             st.markdown("##### 🏛️ Verified Campus Reference Directory")
@@ -730,11 +992,13 @@ with col_output:
                 - **S Block (Floor 5):** School of Law
                 - **E Block (Ground & 1):** R&D Centre
                 - **Admission Block (Floor 1):** Registrar Office
+                - **Central Library:** Reading Halls & Archive
                 """)
             with col_f2:
                 st.markdown("""
-                - **L Block (Ground):** Media Studies
+                - **L Block (Ground):** Media Studies / TV Studio
                 - **L Block (Floor 1):** Dean's Office
-                - **Food Arcade:** Subway, Hatti Kaapi, Aromas, Taj Delight
-                - **Sports Complex:** Basketball, Volleyball, Football, Gym
+                - **Food Arcade:** Subway, Hatti Kaapi, Taj Delight
+                - **Sports Complex:** Indoor Games & Gym
+                - **Dining:** Domino's, Cafe Feasto, Lassi House
                 """)
