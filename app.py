@@ -1,87 +1,313 @@
 """
-Smart Campus Explorer AI — Streamlit Interactive Application
-Multimodal Campus Assistant, Verified Landmark Navigation, CLIP Retrieval,
-VLM Analysis, Parameter Experimentation, and Live Evaluation Suite.
+Smart Campus Explorer AI — Presidency Campus Guide
+Multimodal AI Campus Assistant with Interactive Plotly Route Navigation,
+Grounded Text RAG, Diffusion Visual Generation, and Domain Sidebars.
 """
 
-import streamlit as st
 import os
+import re
 import json
-def render_markdown_table(data_list, columns, col_names=None):
-    """Renders a pure markdown table without requiring compiled pandas DLLs."""
-    display_names = col_names or columns
-    header = "| " + " | ".join(display_names) + " |"
-    sep = "| " + " | ".join(["---"] * len(columns)) + " |"
-    rows = []
-    for item in data_list:
-        row_cells = []
-        for c in columns:
-            val = str(item.get(c, "")).replace("\n", " ").replace("|", "/")
-            row_cells.append(val)
-        rows.append("| " + " | ".join(row_cells) + " |")
-    return "\n".join([header, sep] + rows)
+import streamlit as st
+import networkx as nx
+import plotly.graph_objects as go
+from PIL import Image
+
 from core.multimodal_assistant import CampusAssistant
 from core.evaluator import CampusEvaluator
 
 # Page Configuration
 st.set_page_config(
-    page_title="Smart Campus Explorer AI",
-    page_icon="🎓",
+    page_title="Smart Campus Explorer AI • Presidency Guide",
+    page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling
+# -----------------------------------------------------------------------------
+# HIGH-END STYLING (DM Sans, Glassmorphic Cards, Modern Layout)
+# -----------------------------------------------------------------------------
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.2rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #1e3c72, #2a5298);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.2rem;
-    }
-    .sub-header {
-        color: #57606f;
-        font-size: 1.05rem;
-        margin-bottom: 1.2rem;
-    }
-    .badge-verified {
-        background-color: #2ed573;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: bold;
-    }
-    .badge-citation {
-        background-color: #70a1ff;
-        color: white;
-        padding: 3px 7px;
-        border-radius: 4px;
-        font-size: 0.78rem;
-        font-family: monospace;
-    }
-    .chat-card {
-        background: #f8f9fa;
-        border-left: 4px solid #1e90ff;
-        padding: 12px 16px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-    }
-    .metric-card {
-        background: white;
-        padding: 14px;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-        border-top: 3px solid #2ed573;
-        text-align: center;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+html, body, [class*="css"] {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.stApp {
+    background: #F8FAFC;
+    color: #0F172A;
+}
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 2rem;
+    max-width: 1750px;
+}
+.hero-header {
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F766E 100%);
+    padding: 1.4rem 1.8rem;
+    border-radius: 16px;
+    color: white;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
+}
+.hero-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+.hero-sub {
+    font-size: 0.95rem;
+    color: #94A3B8;
+    margin-top: 0.35rem;
+    margin-bottom: 0.8rem;
+}
+.badge-verified {
+    background: #10B981;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-right: 6px;
+}
+.badge-rag {
+    background: #0EA5E9;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-right: 6px;
+}
+.badge-diffusion {
+    background: #8B5CF6;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+}
+.panel-card {
+    background: #FFFFFF;
+    border-radius: 14px;
+    padding: 1.2rem;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    margin-bottom: 1.2rem;
+}
+.citation-pill {
+    background: #F1F5F9;
+    color: #0369A1;
+    border: 1px solid #BAE6FD;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-family: monospace;
+}
+.step-box {
+    background: #F8FAFC;
+    border-left: 4px solid #10B981;
+    padding: 8px 12px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 6px;
+    font-size: 0.88rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session State
+# -----------------------------------------------------------------------------
+# CAMPUS SCHEMATIC GRAPH & 2D COORDINATES
+# Coordinates reflect campus spatial layout for interactive Plotly visualization.
+# -----------------------------------------------------------------------------
+CAMPUS_COORDINATES = {
+    # Central Avenue & Landmarks
+    "University Entrance": (50, 4, "Entrance", "Ground", "Main campus entrance gateway"),
+    "FOUNTAIN": (50, 32, "Landmark", "Ground", "Central campus landmark & primary navigation anchor"),
+    "UDAYA_UPAHARA": (68, 32, "Food", "Ground", "First left turn from fountain; traditional snacks"),
+    
+    # Engineering & Admission Complex
+    "ENGINEERING_BLOCK": (44, 48, "Academic", "Ground", "Houses engineering faculties; connects internally to H-K & N-U"),
+    "ADMISSION_BLOCK": (58, 48, "Office", "Ground", "Administration and visitor reception; houses Registrar on 1st Floor"),
+    "REGISTRAR_OFFICE": (62, 50, "Office", "1st Floor", "Admission Block 1st floor; student records & admissions"),
+    "CONTROLLER_EXAMINATION": (56, 52, "Office", "Ground", "Examination and evaluation counters"),
+    
+    # Food Stalls
+    "FOOD_STALLS_ADMISSION": (44, 40, "Food", "Ground", "Opposite Admission Block: Subway, Hatti Kaapi, Aromas, Taj Delight"),
+    "SPORTS_AREA": (28, 28, "Sports", "Ground", "Basketball, volleyball, throwball, football courts, gym, sports room"),
+    "DOMINOS": (26, 40, "Food", "Ground", "Outdoor Domino's pizza outlet kiosk"),
+    
+    # D, E, F, L Academic Wings
+    "STATIONERY": (70, 50, "Services", "Ground", "Campus stationery and photocopy supplies near D Block"),
+    "D_BLOCK": (76, 54, "Academic", "Ground", "Academic block near stationery; 5th floor houses School of Design"),
+    "SCHOOL_OF_DESIGN": (76, 57, "Academic", "5th Floor", "School of Design studios on 5th floor of D Block"),
+    "E_BLOCK": (84, 64, "Academic", "Ground", "Left from D Block; E Block seminar hall & R&D Centre"),
+    "RD_CENTRE": (86, 65, "Research", "Ground & 1st Floor", "Research & Development Centre on ground & 1st floor of E Block"),
+    "F_BLOCK": (84, 72, "Academic", "Ground", "F Block seminar hall; directly connects to L Block"),
+    "L_BLOCK": (84, 82, "Academic", "Ground", "Ground floor School of Media Studies; 1st floor Dean's Office"),
+    "SCHOOL_OF_MEDIA_STUDIES": (88, 82, "Academic", "Ground", "Media Studies soundstages and TV Studio on L Block ground floor"),
+    "DEAN_OFFICE_L_BLOCK": (88, 85, "Office", "1st Floor", "Dean's Office on 1st floor of L Block"),
+    "FOOD_STALLS_L_BLOCK": (74, 82, "Food", "Ground", "Food arcade: V Mart, Crazy Cups, Hatti Kaapi, Lassi Area"),
+    
+    # Engineering Spine (H, J, K -> N, P, Q, R, S, U)
+    "H_BLOCK": (44, 58, "Academic", "Ground", "Internal corridor connection inside Engineering Block"),
+    "J_BLOCK": (44, 64, "Academic", "Ground", "Internal engineering corridor"),
+    "K_BLOCK": (44, 70, "Academic", "Ground", "Connecting passage towards N Block"),
+    "N_BLOCK": (52, 75, "Academic", "Ground", "Academic block connector"),
+    "P_BLOCK": (58, 80, "Academic", "Ground", "Academic block; food stalls accessible on right side"),
+    "Q_BLOCK": (58, 85, "Academic", "Ground", "Corridor connecting P and R blocks"),
+    "R_BLOCK": (58, 90, "Academic", "Ground", "Corridor connecting Q and S blocks"),
+    "S_BLOCK": (58, 95, "Academic", "Ground", "Academic block; 5th floor houses School of Law"),
+    "SCHOOL_OF_LAW": (62, 97, "Academic", "5th Floor", "School of Law faculty and moot court on 5th floor of S Block"),
+    "U_BLOCK": (58, 100, "Academic", "Ground", "Terminal academic block in southern spine"),
+    
+    # Campus Facilities & West Wing
+    "CENTRAL_LIBRARY": (35, 52, "Facility", "Ground & 1st", "Multi-storey campus library and reading halls"),
+    "CAFETERIA": (24, 52, "Food", "Ground", "Central student cafeteria concourse"),
+    "AUDITORIUM": (24, 62, "Facility", "Ground", "Grand campus auditorium and event amphitheater"),
+    "DEAN_OFFICE_MBA": (24, 70, "Office", "1st Floor", "Dean Office of MBA Department in Admin / Management complex"),
+    "AMPHITHEATER": (38, 44, "Landmark", "Ground", "Open-air amphitheater with landscaped lawn steps")
+}
+
+# Domain Category Taxonomy for Sidebar Navigation
+DOMAIN_CATEGORIES = {
+    "🎓 Academic Blocks & Schools": [
+        ("D_BLOCK", "D Block (School of Design on 5th Floor)"),
+        ("SCHOOL_OF_DESIGN", "School of Design (D Block Floor 5)"),
+        ("S_BLOCK", "S Block (School of Law on 5th Floor)"),
+        ("SCHOOL_OF_LAW", "School of Law (S Block Floor 5)"),
+        ("ENGINEERING_BLOCK", "Engineering Block (H, J, K Wings)"),
+        ("E_BLOCK", "E Block (R&D Centre)"),
+        ("F_BLOCK", "F Block (Seminar Hall)"),
+        ("L_BLOCK", "L Block (School of Media Studies & Dean Office)"),
+        ("SCHOOL_OF_MEDIA_STUDIES", "School of Media Studies / TV Studio"),
+        ("N_BLOCK", "N Block"),
+        ("P_BLOCK", "P Block"),
+        ("Q_BLOCK", "Q Block"),
+        ("R_BLOCK", "R Block"),
+        ("U_BLOCK", "U Block")
+    ],
+    "🏛️ Offices & Administration": [
+        ("ADMISSION_BLOCK", "Admission Block"),
+        ("REGISTRAR_OFFICE", "Office of the Registrar (Admission Block Floor 1)"),
+        ("CONTROLLER_EXAMINATION", "Office of Controller of Examination"),
+        ("DEAN_OFFICE_MBA", "Dean Office of MBA Department"),
+        ("DEAN_OFFICE_L_BLOCK", "Dean's Office (L Block Floor 1)")
+    ],
+    "☕ Food & Dining Outlets": [
+        ("FOOD_STALLS_ADMISSION", "Food Stalls (Subway, Hatti Kaapi, Aromas, Taj Delight)"),
+        ("FOOD_STALLS_L_BLOCK", "Food Arcade (V Mart, Crazy Cups, Lassi Area)"),
+        ("UDAYA_UPAHARA", "Udaya Upahara (First left from Fountain)"),
+        ("CAFETERIA", "Central Cafeteria"),
+        ("DOMINOS", "Domino's Pizza Outlet")
+    ],
+    "🏀 Sports & Campus Facilities": [
+        ("SPORTS_AREA", "Sports Complex (Basketball, Volleyball, Football, Gym)"),
+        ("CENTRAL_LIBRARY", "Central University Library"),
+        ("RD_CENTRE", "Research & Development (R&D) Centre"),
+        ("AUDITORIUM", "Main Campus Auditorium"),
+        ("AMPHITHEATER", "Open-Air Amphitheater"),
+        ("STATIONERY", "Stationery & Photocopy Store")
+    ]
+}
+
+# -----------------------------------------------------------------------------
+# PLOTLY INTERACTIVE MAP BUILDER
+# -----------------------------------------------------------------------------
+def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_node=None, dest_node=None):
+    """
+    Renders an interactive 2D schematic campus map using Plotly.
+    Highlights confirmed background walkways and active shortest-path route.
+    """
+    active_route = active_route or []
+    fig = go.Figure()
+
+    # 1. Background Walkable Paths (Light Slate Gray)
+    for u, v in nav_graph.edges():
+        if u in CAMPUS_COORDINATES and v in CAMPUS_COORDINATES:
+            xu, yu, _, _, _ = CAMPUS_COORDINATES[u]
+            xv, yv, _, _, _ = CAMPUS_COORDINATES[v]
+            fig.add_trace(go.Scatter(
+                x=[xu, xv], y=[yu, yv],
+                mode="lines",
+                line=dict(color="#CBD5E1", width=3),
+                hoverinfo="skip",
+                showlegend=False
+            ))
+
+    # 2. Highlighted Route Segments (Vibrant Emerald / Cyan)
+    if len(active_route) > 1:
+        rx, ry = [], []
+        route_hover_texts = []
+        for i, node_id in enumerate(active_route):
+            if node_id in CAMPUS_COORDINATES:
+                x, y, cat, floor, desc = CAMPUS_COORDINATES[node_id]
+                rx.append(x)
+                ry.append(y)
+                route_hover_texts.append(f"<b>Step {i+1}: {node_id.replace('_', ' ')}</b><br>{desc}")
+
+        fig.add_trace(go.Scatter(
+            x=rx, y=ry,
+            mode="lines+markers",
+            line=dict(color="#10B981", width=6),
+            marker=dict(size=12, color="#10B981", line=dict(color="#FFFFFF", width=2)),
+            name="Verified Route",
+            text=route_hover_texts,
+            hoverinfo="text"
+        ))
+
+    # 3. Campus Location Nodes
+    xs, ys, node_names, colors, sizes, hovers = [], [], [], [], [], []
+    for node_id, (x, y, category, floor, desc) in CAMPUS_COORDINATES.items():
+        xs.append(x)
+        ys.append(y)
+        clean_name = node_id.replace("_", " ")
+        node_names.append(clean_name)
+        hovers.append(f"<b>{clean_name}</b><br>🏷️ Category: {category}<br>🏢 Floor: {floor}<br>📝 {desc}")
+
+        if node_id == start_node:
+            colors.append("#2563EB")  # Royal Blue for Start
+            sizes.append(20)
+        elif node_id == dest_node:
+            colors.append("#DC2626")  # Crimson Red for Destination
+            sizes.append(20)
+        elif node_id in active_route:
+            colors.append("#10B981")  # Emerald for Route Waypoints
+            sizes.append(14)
+        else:
+            colors.append("#64748B")  # Muted Slate for others
+            sizes.append(10)
+
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys,
+        mode="markers+text",
+        marker=dict(size=sizes, color=colors, line=dict(color="#FFFFFF", width=1.5)),
+        text=node_names,
+        textposition="top center",
+        textfont=dict(size=9, color="#0F172A", family="Plus Jakarta Sans"),
+        hovertext=hovers,
+        hoverinfo="text",
+        showlegend=False
+    ))
+
+    fig.update_layout(
+        height=520,
+        margin=dict(l=15, r=15, t=15, b=15),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#F8FAFC",
+        xaxis=dict(visible=False, range=[15, 95], fixedrange=True),
+        yaxis=dict(visible=False, range=[0, 108], fixedrange=True, scaleanchor="x"),
+        hoverlabel=dict(bgcolor="#0F172A", font_size=11, font_color="#FFFFFF"),
+        showlegend=False
+    )
+    return fig
+
+# -----------------------------------------------------------------------------
+# INITIALIZE ASSISTANT ENGINE
+# -----------------------------------------------------------------------------
 if "assistant" not in st.session_state:
     st.session_state.assistant = CampusAssistant()
 
@@ -89,319 +315,246 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "👋 Welcome to **Smart Campus Explorer AI**! I understand campus information from verified PDFs and images.\n\n"
-                       "You can ask me about campus facilities, floor locations, navigate between any buildings using landmarks, "
-                       "or upload photos to find matching campus locations.",
+            "content": "👋 Welcome to **Smart Campus Explorer AI**! I am your multimodal campus guide.\n\n"
+                       "Ask me about any building, floor location, food stall, navigate to any facility with verified landmarks, "
+                       "upload photos for visual recognition, or request conceptual architectural illustrations.",
             "citations": ["[campus_directions.pdf, Page 1]"],
-            "route_svg": None,
-            "illustration": None
+            "route_result": None,
+            "generated_image": None
         }
     ]
 
+if "last_route" not in st.session_state:
+    st.session_state.last_route = None
+
+if "last_gen_image" not in st.session_state:
+    st.session_state.last_gen_image = None
+
 assistant = st.session_state.assistant
 
-# ----------------- SIDEBAR CONTROLS -----------------
+# -----------------------------------------------------------------------------
+# SIDEBAR: CLICKABLE DOMAINS, ROUTE SELECTOR & CONTROLS
+# -----------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### ⚙️ Experimental Parameters")
-    st.caption("Adjust model & retrieval parameters to test campus assistant performance.")
+    st.markdown("### 🧭 Quick Route Planner")
+    st.caption("Select locations from the dropdowns to compute verified paths:")
 
-    st.markdown("#### 📄 RAG & Embeddings")
-    chunk_size = st.select_slider("Chunk Size (words)", options=[100, 180, 300], value=180)
-    chunk_overlap = st.select_slider("Chunk Overlap (words)", options=[0, 30, 50], value=30)
-    top_k = st.slider("Top-k Retrieval", min_value=1, max_value=8, value=3)
-    similarity_method = st.selectbox("Similarity Metric", ["cosine", "dot_product"], index=0)
-    use_reranker = st.toggle("Cross-Score Reranking", value=True)
+    node_keys = sorted(list(CAMPUS_COORDINATES.keys()))
+    start_default_idx = node_keys.index("FOUNTAIN") if "FOUNTAIN" in node_keys else 0
+    dest_default_idx = node_keys.index("SCHOOL_OF_LAW") if "SCHOOL_OF_LAW" in node_keys else 1
 
-    st.markdown("#### 🤖 LLM Generation")
-    temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.2, step=0.05)
-    top_p = st.slider("Top-P Nucleus", min_value=0.1, max_value=1.0, value=0.95, step=0.05)
+    sb_start = st.selectbox("📍 Starting Point", options=node_keys, index=start_default_idx, format_func=lambda x: x.replace("_", " "))
+    sb_dest = st.selectbox("🎯 Destination", options=node_keys, index=dest_default_idx, format_func=lambda x: x.replace("_", " "))
 
-    st.markdown("#### 🖼️ CLIP & Vision")
-    clip_threshold = st.slider("CLIP Match Threshold", min_value=0.1, max_value=0.8, value=0.35, step=0.05)
-
-    # Dynamic parameter update
-    if (assistant.rag_engine.chunk_size != chunk_size or
-        assistant.rag_engine.chunk_overlap != chunk_overlap or
-        assistant.rag_engine.top_k != top_k or
-        assistant.rag_engine.similarity_method != similarity_method or
-        assistant.rag_engine.use_reranker != use_reranker or
-        assistant.rag_engine.temperature != temperature):
-        
-        assistant.rag_engine.chunk_size = chunk_size
-        assistant.rag_engine.chunk_overlap = chunk_overlap
-        assistant.rag_engine.top_k = top_k
-        assistant.rag_engine.similarity_method = similarity_method
-        assistant.rag_engine.use_reranker = use_reranker
-        assistant.rag_engine.temperature = temperature
-        # Reload corpus with new chunking
-        text_path = os.path.join(assistant.data_dir, "campus_directions.txt")
-        if os.path.exists(text_path):
-            with open(text_path, "r", encoding="utf-8") as f:
-                assistant.rag_engine.load_corpus_from_text(f.read())
-        st.toast("Updated parameters and re-indexed corpus!", icon="🔄")
-
-    st.markdown("---")
-    st.markdown("### 📍 Active Session Context")
-    current_src = assistant.session_source or "*Not yet set*"
-    st.info(f"**Current Source:** `{current_src}`")
-    if st.button("Reset Session Location"):
-        assistant.session_source = None
+    if st.button("🚀 Calculate Verified Route", type="primary", use_container_width=True):
+        route_calc = assistant.nav_graph.get_route(sb_start, sb_dest)
+        st.session_state.last_route = route_calc
+        assistant.session_source = sb_start
+        st.session_state.messages.append({
+            "role": "user",
+            "content": f"How do I reach {sb_dest.replace('_', ' ')} from {sb_start.replace('_', ' ')}?"
+        })
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": assistant.nav_graph.generate_natural_directions(route_calc),
+            "citations": ["[campus_directions.pdf]"],
+            "route_result": route_calc,
+            "generated_image": None
+        })
         st.rerun()
 
     st.markdown("---")
-    st.markdown("### 💡 Quick Test Prompts")
-    quick_prompts = [
-        "Which floor is the School of Design on?",
-        "Where is the School of Law?",
-        "Where is the Registrar's Office?",
-        "Which food stalls are opposite the Admission Block?",
-        "I am in D Block. How do I reach the School of Design?",
-        "From the fountain, guide me to the School of Law.",
-        "I am in D Block. How do I reach MBA?",
-        "Find a photo of D Block.",
-        "Generate an illustration of the campus entrance."
-    ]
-    for qp in quick_prompts:
-        if st.button(qp, key=f"qp_{qp}"):
-            st.session_state.active_query = qp
-            st.rerun()
+    st.markdown("### 🏫 Clickable Campus Domains")
+    st.caption("Browse registered facilities by category:")
 
-# ----------------- MAIN TITLE & TABS -----------------
-st.markdown('<div class="main-header">🎓 Smart Campus Explorer AI</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Multimodal AI Campus Assistant • PDF RAG • Verified Landmark Navigation • CLIP Vision • Live Evaluation Suite</div>', unsafe_allow_html=True)
+    for category_name, facilities in DOMAIN_CATEGORIES.items():
+        with st.expander(category_name, expanded=False):
+            for fid, fname in facilities:
+                col_btn1, col_btn2 = st.columns([7, 3])
+                with col_btn1:
+                    st.markdown(f"**{fname}**")
+                with col_btn2:
+                    if st.button("Route ➔", key=f"btn_nav_{fid}", help=f"Set as destination"):
+                        current_s = assistant.session_source or "FOUNTAIN"
+                        route_calc = assistant.nav_graph.get_route(current_s, fid)
+                        st.session_state.last_route = route_calc
+                        st.session_state.messages.append({
+                            "role": "user",
+                            "content": f"Guide me to {fname}"
+                        })
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": assistant.nav_graph.generate_natural_directions(route_calc),
+                            "citations": ["[campus_directions.pdf]"],
+                            "route_result": route_calc,
+                            "generated_image": None
+                        })
+                        st.rerun()
 
-tab_chat, tab_map, tab_params, tab_eval, tab_defense = st.tabs([
-    "💬 Multimodal Campus Chatbot",
-    "🗺️ Campus Map & Route Visualizer",
-    "⚙️ Parameter Sensitivity",
-    "📊 Evaluation & Benchmarks",
-    "📖 Evaluator Defense Guide"
-])
+    st.markdown("---")
+    st.markdown("### ⚙️ Experimental Parameters")
+    with st.expander("🛠️ Retrieval & Model Controls", expanded=False):
+        chunk_size = st.select_slider("RAG Chunk Size (words)", options=[100, 180, 300], value=180)
+        top_k = st.slider("Top-k Retrieval", min_value=1, max_value=5, value=3)
+        sim_method = st.selectbox("Similarity Metric", ["cosine", "dot_product"], index=0)
+        temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.2, step=0.05)
 
-# ----------------- TAB 1: CHATBOT -----------------
-with tab_chat:
-    col_chat, col_inspect = st.columns([7, 3])
+        assistant.rag_engine.chunk_size = chunk_size
+        assistant.rag_engine.top_k = top_k
+        assistant.rag_engine.similarity_method = sim_method
+        assistant.rag_engine.temperature = temperature
 
-    with col_chat:
-        # Display Message History
+    st.markdown("---")
+    st.markdown("### 📊 Benchmark & Evaluation")
+    if st.button("▶️ Run Automated Audit (16 Tests)", use_container_width=True):
+        evaluator = CampusEvaluator(assistant)
+        eval_res = evaluator.run_benchmark()
+        st.success(f"Audit Complete! Overall Accuracy: {eval_res['metrics']['overall_accuracy']*100:.1f}% | Path Validity: {eval_res['metrics']['nav_path_validity']*100:.1f}%")
+
+    if st.button("🔄 Reset Chat & Location", use_container_width=True):
+        assistant.session_source = None
+        st.session_state.messages = st.session_state.messages[:1]
+        st.session_state.last_route = None
+        st.session_state.last_gen_image = None
+        st.rerun()
+
+# -----------------------------------------------------------------------------
+# MAIN INTERFACE: HERO HEADER
+# -----------------------------------------------------------------------------
+st.markdown("""
+<div class="hero-header">
+    <div class="hero-title">🧭 Smart Campus Explorer AI • Presidency Guide</div>
+    <div class="hero-sub">Multimodal Campus Assistant • Grounded PDF RAG • Verified Landmark Navigation • Diffusion Generative Visuals</div>
+    <div>
+        <span class="badge-verified">✅ 100% Path Validity Guaranteed</span>
+        <span class="badge-rag">📄 Grounded PDF RAG</span>
+        <span class="badge-diffusion">🎨 Diffusion Scene Synthesis</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TWO-COLUMN LAYOUT: CHATBOT INTERFACE (LEFT) & LIVE OUTPUT WINDOW (RIGHT)
+# -----------------------------------------------------------------------------
+col_chat, col_output = st.columns([5, 6], gap="medium")
+
+# ==================== LEFT COLUMN: CHATBOT UI ====================
+with col_chat:
+    st.markdown("#### 💬 Multimodal Campus Chatbot")
+
+    # Quick prompt pills
+    st.caption("💡 Quick prompts to try:")
+    qp_cols = st.columns(3)
+    with qp_cols[0]:
+        if st.button("Floor of Design?", use_container_width=True):
+            st.session_state.active_query = "Which floor is the School of Design on?"
+    with qp_cols[1]:
+        if st.button("Fountain ➔ Law", use_container_width=True):
+            st.session_state.active_query = "From the fountain, guide me to the School of Law using landmarks."
+    with qp_cols[2]:
+        if st.button("Entrance Visual", use_container_width=True):
+            st.session_state.active_query = "Generate an illustration of the campus entrance"
+
+    # Chat Messages Scroll Area
+    chat_container = st.container(height=450)
+    with chat_container:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 if msg.get("citations"):
-                    st.markdown(" ".join([f"`{c}`" for c in msg["citations"]]))
-                if msg.get("route_svg"):
-                    st.markdown(msg["route_svg"], unsafe_allow_html=True)
-                if msg.get("generated_image_path") and os.path.exists(msg["generated_image_path"]):
-                    st.image(msg["generated_image_path"], caption="🎨 Diffusion Generated Illustrative Visual Guide (Conceptual Visual Aid)", use_container_width=True)
-                elif msg.get("illustration") and "svg_data" in msg["illustration"]:
-                    st.markdown(msg["illustration"]["svg_data"], unsafe_allow_html=True)
+                    st.markdown(" ".join([f"<span class='citation-pill'>{c}</span>" for c in msg["citations"]]), unsafe_allow_html=True)
+                if msg.get("generated_image") and os.path.exists(msg["generated_image"]):
+                    st.image(msg["generated_image"], caption="🎨 Diffusion Generated Visual Aid", use_container_width=True)
 
-        # File Uploader for Multimodal Input
-        uploaded_file = st.file_uploader("📷 Upload a campus photo (Optional)", type=["jpg", "jpeg", "png"])
-        uploaded_filename = None
-        if uploaded_file:
-            uploaded_filename = uploaded_file.name
-            st.success(f"Attached campus photo: **{uploaded_filename}**")
+    # Image File Uploader
+    uploaded_photo = st.file_uploader("📷 Upload a campus photo or map snippet (Optional)", type=["jpg", "jpeg", "png"], key="uploader_main")
+    uploaded_name = uploaded_photo.name if uploaded_photo else None
+    if uploaded_photo:
+        st.info(f"Photo attached: **{uploaded_name}**")
 
-        # Chat Input
-        query_input = st.chat_input("Ask about buildings, food stalls, floors, directions, or photos...")
-        
-        # Check if query came from quick prompt
-        if "active_query" in st.session_state and st.session_state.active_query:
-            query_input = st.session_state.active_query
-            st.session_state.active_query = None
+    # Chat Input Box
+    query_input = st.chat_input("Ask about buildings, floors, food stalls, routes, or request illustrations...")
 
-        if query_input:
-            # Append User Message
-            st.session_state.messages.append({"role": "user", "content": query_input})
-            
-            # Process with Multimodal Assistant
-            with st.spinner("Processing campus multimodal query..."):
-                resp = assistant.process_query(query_input, uploaded_image=uploaded_filename)
+    if "active_query" in st.session_state and st.session_state.active_query:
+        query_input = st.session_state.active_query
+        st.session_state.active_query = None
 
-            # Append Assistant Message
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": resp["answer"],
-                "citations": resp.get("citations", []),
-                "route_svg": resp.get("route_diagram_svg"),
-                "illustration": resp.get("visual_illustration"),
-                "generated_image_path": resp.get("generated_image_path")
-            })
-            st.rerun()
+    if query_input:
+        # Append User Message
+        st.session_state.messages.append({"role": "user", "content": query_input})
 
-    with col_inspect:
-        st.markdown("### 🔍 Live Evidence Inspector")
-        st.caption("Real-time view of verified retrieved facts and active execution branch.")
-        
-        last_msg = st.session_state.messages[-1]
-        if last_msg["role"] == "assistant":
-            st.success("✅ **Evidence-Grounded Response**")
-            if last_msg.get("citations"):
-                st.markdown("**Source Citations:**")
-                for c in last_msg["citations"]:
-                    st.markdown(f"- <span class='badge-citation'>{c}</span>", unsafe_allow_html=True)
+        # Process Query with Multimodal Assistant Engine
+        with st.spinner("Processing campus query..."):
+            resp = assistant.process_query(query_input, uploaded_image=uploaded_name)
 
-        st.markdown("---")
-        st.markdown("#### 🏛️ Campus Fact Quick Reference")
-        st.markdown("""
-        - **D Block (5th Floor):** School of Design
-        - **S Block (5th Floor):** School of Law
-        - **E Block (Ground & 1st Floor):** R&D Centre
-        - **Admission Block (1st Floor):** Office of the Registrar
-        - **L Block (Ground Floor):** School of Media Studies
-        - **L Block (1st Floor):** Dean's Office
-        - **Opposite Admission Block:** Subway, Hatti Kaapi, Aromas of Malenadu, Taj Delight
-        """)
+        if resp.get("route_result"):
+            st.session_state.last_route = resp["route_result"]
+        if resp.get("generated_image_path"):
+            st.session_state.last_gen_image = resp["generated_image_path"]
 
-# ----------------- TAB 2: CAMPUS MAP & ROUTE VISUALIZER -----------------
-with tab_map:
-    st.markdown("### 🗺️ Deterministic Campus Graph Navigation")
-    st.write("Routes are computed strictly along confirmed traversable physical edges using **NetworkX**. "
-             "The system rejects non-existent paths to eliminate navigation hallucinations.")
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": resp["answer"],
+            "citations": resp.get("citations", []),
+            "route_result": resp.get("route_result"),
+            "generated_image": resp.get("generated_image_path")
+        })
+        st.rerun()
 
-    col_m1, col_m2 = st.columns([1, 1])
-    with col_m1:
-        source_opt = st.selectbox(
-            "Select Starting Point (Source)",
-            options=sorted(list(assistant.nav_graph.graph.nodes.keys())),
-            index=sorted(list(assistant.nav_graph.graph.nodes.keys())).index("FOUNTAIN")
-        )
-    with col_m2:
-        dest_opt = st.selectbox(
-            "Select Target Location (Destination)",
-            options=sorted(list(assistant.nav_graph.graph.nodes.keys())),
-            index=sorted(list(assistant.nav_graph.graph.nodes.keys())).index("SCHOOL_OF_LAW")
-        )
+# ==================== RIGHT COLUMN: OUTPUT WINDOW & VISUALS ====================
+with col_output:
+    st.markdown("#### 🗺️ Live Output Window & Navigation Visualizer")
 
-    if st.button("🚀 Calculate Verified Shortest Route", type="primary"):
-        route_data = assistant.nav_graph.get_route(source_opt, dest_opt)
-        
-        if route_data.get("success"):
-            st.success(f"Path Found: ~{route_data['total_distance_m']} meters across {len(route_data['steps'])} segments.")
-            svg_diag = assistant.visual_gen.generate_route_diagram_svg(route_data)
-            st.markdown(svg_diag, unsafe_allow_html=True)
+    # Render Interactive Plotly Campus Map
+    active_route_nodes = []
+    start_point = assistant.session_source
+    dest_point = None
 
-            st.markdown("#### 📋 Turn-by-Turn Landmark Guidance:")
-            st.markdown(assistant.nav_graph.generate_natural_directions(route_data))
-        else:
-            st.error(route_data.get("error", "No path found."))
+    if st.session_state.last_route and st.session_state.last_route.get("success"):
+        active_route_nodes = st.session_state.last_route.get("route", [])
+        start_point = st.session_state.last_route.get("source")
+        dest_point = st.session_state.last_route.get("destination")
 
-    st.markdown("---")
-    st.markdown("#### 🌐 Campus Graph Topology Statistics:")
-    g = assistant.nav_graph.graph
-    col_g1, col_g2, col_g3 = st.columns(3)
-    col_g1.metric("Total Mapped Nodes", len(g.nodes))
-    col_g2.metric("Verified Traversable Edges", len(g.edges))
-    col_g3.metric("Path Validity Guarantee", "100.0% (Zero Hallucination)")
-
-# ----------------- TAB 3: PARAMETER SENSITIVITY -----------------
-with tab_params:
-    st.markdown("### ⚙️ Parameter Exploration & Architectural Sensitivity")
-    st.write("Compare how varying fundamental AI parameters affects representation quality, retrieval recall, and latency.")
-
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        st.markdown("#### 1. Chunk Size & Overlap Trade-offs")
-        st.markdown("""
-        | Chunk Size | Recall@3 | Context Precision | Risk / Behavior |
-        |---|---|---|---|
-        | **100 words** | 78.5% | High | Splits multi-hop route descriptions midway through sentences |
-        | **180 words (Default)** | **96.2%** | **Optimal** | Preserves building-to-landmark connections without dilution |
-        | **300 words** | 91.0% | Lower | Introduces extraneous block details, increasing context noise |
-        """)
-
-        st.markdown("#### 2. Top-k Retrieval Depth")
-        st.markdown("""
-        | Top-k | Recall | Context Noise | Latency |
-        |---|---|---|---|
-        | **k = 1** | 83.3% | Zero noise | Fastest (~12ms) |
-        | **k = 3 (Default)** | **98.4%** | Very low | Balanced (~18ms) |
-        | **k = 5** | 100.0% | Moderate | Slightly higher (~24ms) |
-        """)
-
-    with col_p2:
-        st.markdown("#### 3. Embedding Vector Space & Reranker")
-        st.markdown("""
-        - **Cosine Similarity:** Measures directional alignment, normalizing for variable passage length.
-        - **Dot Product:** Emphasizes frequent keyword matches but can favor longer passages.
-        - **Cross-Score Reranking:** Applies keyword-in-passage reweighting to ensure specific facility names appear at Rank 1.
-        """)
-
-        st.markdown("#### 4. Active Corpus Index Metrics:")
-        st.metric("Total Indexed Chunks", len(assistant.rag_engine.chunks))
-        st.metric("Vocabulary Term Dimensions", len(assistant.rag_engine.vocabulary or assistant.rag_engine.idf))
-
-# ----------------- TAB 4: EVALUATION & BENCHMARKS -----------------
-with tab_eval:
-    st.markdown("### 📊 Live Evaluation & Ablation Framework")
-    st.write("Run automated benchmarking across verified test queries (RAG-01..04, NAV-01..04, IMG-01..02, VLM-01, GEN-01) "
-             "and inspect ablation studies A1 through A8.")
-
-    evaluator = CampusEvaluator(assistant)
-
-    if st.button("▶️ Execute Full Evaluation Suite", type="primary"):
-        with st.spinner("Running evaluation across all test cases..."):
-            eval_res = evaluator.run_benchmark()
-            metrics = eval_res["metrics"]
-            cases = eval_res["case_results"]
-
-        st.success("Evaluation Complete!")
-
-        # Metric Scorecards
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        m_col1.metric("Overall Accuracy", f"{metrics['overall_accuracy']*100:.1f}%")
-        m_col2.metric("RAG Recall@3", f"{metrics['rag_recall_at_3']*100:.1f}%")
-        m_col3.metric("Path Validity", f"{metrics['nav_path_validity']*100:.1f}%")
-        m_col4.metric("Median Latency", f"{metrics['median_latency_ms']} ms")
-
-        st.markdown("#### 📋 Test Case Detailed Audit:")
-        cases_md = render_markdown_table(
-            cases,
-            columns=["test_id", "query", "type", "correct", "latency_ms", "notes"],
-            col_names=["Test ID", "Query", "Type", "Passed", "Latency (ms)", "Audit Notes"]
-        )
-        st.markdown(cases_md)
-
-    st.markdown("---")
-    st.markdown("### 🔬 Ablation Studies (A1 to A8 Comparison)")
-    st.caption("Formal evaluation isolating each component to demonstrate its independent contribution.")
-
-    ablations = evaluator.run_ablations()
-    ab_md = render_markdown_table(
-        ablations,
-        columns=["id", "name", "baseline_score", "comparison_score", "key_finding"],
-        col_names=["ID", "Experiment", "Baseline Score", "Proposed Architecture", "Key Scientific Finding"]
+    plotly_fig = make_interactive_campus_map(
+        assistant.nav_graph.graph,
+        active_route=active_route_nodes,
+        start_node=start_point,
+        dest_node=dest_point
     )
-    st.markdown(ab_md)
+    st.plotly_chart(plotly_fig, use_container_width=True, config={"displayModeBar": False})
 
-# ----------------- TAB 5: EVALUATOR DEFENSE GUIDE -----------------
-with tab_defense:
-    st.markdown("### 📖 Evaluator Defense & Architectural FAQ")
-    st.caption("Key technical arguments to explain to project evaluators.")
+    # Output Card 1: Turn-by-Turn Guidance if route is active
+    if st.session_state.last_route and st.session_state.last_route.get("success"):
+        r_data = st.session_state.last_route
+        with st.container():
+            st.markdown(f"##### 🚶 Verified Route Guidance (~{r_data['total_distance_m']}m walking distance)")
+            for s in r_data.get("steps", []):
+                landmark_info = f" • *Landmark: {s['landmark']}*" if s.get('landmark') else ""
+                vertical_info = " 🛗 [Elevator/Stairs]" if s.get('is_vertical') else ""
+                st.markdown(f"<div class='step-box'><b>Step {s['step_number']}:</b> {s['instruction']}{landmark_info}{vertical_info}</div>", unsafe_allow_html=True)
 
-    with st.expander("1. Why separate RAG, CLIP, VLM, and Graph Navigation instead of a single LLM prompt?", expanded=True):
-        st.markdown("""
-        - **RAG retrieves factual evidence:** It guarantees citations from verified PDFs (`[campus_directions.pdf, Page X]`).
-        - **CLIP performs visual similarity search:** Embeds images and text into a shared vector space for photo lookup.
-        - **VLM performs image interpretation:** Reads signs and describes entrances, but cannot authoritatively assert unknown locations.
-        - **Graph algorithms calculate valid routes:** NetworkX deterministically enforces traversable paths. An LLM alone has a **32% path validity rate** because it hallucinates shortcuts through solid walls or non-existent corridors.
-        """)
+    # Output Card 2: Generated Diffusion Visual Aid if available
+    elif st.session_state.last_gen_image and os.path.exists(st.session_state.last_gen_image):
+        with st.container():
+            st.markdown("##### 🎨 Diffusion Generative Campus Visual Aid")
+            st.image(st.session_state.last_gen_image, caption="⚠️ Illustrative Conceptual Visual Aid — Not Verified Route Geometry", use_container_width=True)
 
-    with st.expander("2. How does the system handle missing or ambiguous source locations?"):
-        st.markdown("""
-        - The system never silently replaces a missing source with the fountain.
-        - If the user provides a location earlier (e.g. *"I am in D Block"*), it is preserved in `session_source`.
-        - If the destination is ambiguous (e.g. *"MBA"*), the system requests clarification between the Dean Office of MBA Department and classrooms.
-        """)
-
-    with st.expander("3. Why are generated visual scenes clearly watermarked?"):
-        st.markdown("""
-        - An image generation model generates conceptual visual aids, not verified route geometry.
-        - In accordance with safety and verification principles, all generated illustrations include the mandatory disclaimer:
-          `⚠️ ILLUSTRATIVE CONCEPTUAL VISUAL AID — NOT VERIFIED ROUTE GEOMETRY`.
-        - Actual navigation paths are rendered deterministically directly from the graph topology.
-        """)
-
-st.markdown("---")
-st.caption("Smart Campus Explorer AI • Multimodal Campus Architecture • Built with Streamlit & NetworkX")
+    # Output Card 3: Default Campus Directory Overview
+    else:
+        with st.container():
+            st.markdown("##### 🏛️ Verified Campus Reference Facts")
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                st.markdown("""
+                - **D Block (Floor 5):** School of Design
+                - **S Block (Floor 5):** School of Law
+                - **E Block (Ground & 1):** R&D Centre
+                - **Admission Block (Floor 1):** Registrar Office
+                """)
+            with col_f2:
+                st.markdown("""
+                - **L Block (Ground):** Media Studies
+                - **L Block (Floor 1):** Dean's Office
+                - **Food Arcade:** Subway, Hatti Kaapi, Aromas, Taj Delight
+                - **Sports Complex:** Basketball, Volleyball, Football, Gym
+                """)
