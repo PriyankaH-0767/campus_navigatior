@@ -518,7 +518,24 @@ with col_chat:
                     st.image(msg["generated_image"], caption="🎨 Diffusion Generated Visual Aid", use_container_width=True)
 
     # Image File Uploader & Disk Cache
+    # Image Input: File Uploader or Sample Preset Selector
+    sample_photos = {
+        "-- Or pick a verified campus photo to test --": None,
+        "🏛️ Admin Block (Main Atrium)": "data/sample_images/admin_block.jpg",
+        "📋 Office of the Registrar (Counter Signs)": "data/sample_images/office_of_the_registrar.jpg",
+        "🎨 School of Design (D Block Floor 5)": "data/sample_images/school_of_design.jpg",
+        "⚖️ School of Law (S Block Floor 5)": "data/sample_images/school_of_law.jpg",
+        "🍕 Domino's Pizza Outlet": "data/sample_images/dominos.jpg",
+        "📚 Central University Library": "data/sample_images/central_library.jpg",
+        "☕ Udaya Upahar (Snacks Landmark)": "data/sample_images/udaya_upahar.jpg",
+        "🔬 AI Centre of Excellence": "data/sample_images/ai_centre_of_excellence.jpg",
+        "🏀 Indoor Games Hall": "data/sample_images/indoor_games.jpg",
+        "🎬 School of Media Studies (TV Studio)": "data/sample_images/media_studies.jpg"
+    }
+
     uploaded_photo = st.file_uploader("📷 Upload a campus photo or facility picture", type=["jpg", "jpeg", "png"], key="uploader_main")
+    selected_sample = st.selectbox("🖼️ Or test with an official campus photograph:", options=list(sample_photos.keys()), index=0)
+
     uploaded_path = None
     if uploaded_photo is not None:
         upload_dir = os.path.join("data", "uploads")
@@ -526,13 +543,16 @@ with col_chat:
         uploaded_path = os.path.join(upload_dir, uploaded_photo.name)
         with open(uploaded_path, "wb") as f:
             f.write(uploaded_photo.getbuffer())
-        
+    elif sample_photos.get(selected_sample):
+        uploaded_path = sample_photos[selected_sample]
+
+    if uploaded_path and os.path.exists(uploaded_path):
         col_prev1, col_prev2 = st.columns([1, 2])
         with col_prev1:
             st.image(uploaded_path, caption="📷 Ready to Analyze", width=140)
         with col_prev2:
-            st.markdown(f"**Attached:** `{uploaded_photo.name}`")
-            st.caption("Click button below or type a query to identify location, read signs & discover nearest landmarks.")
+            st.markdown(f"**Photo Selected:** `{os.path.basename(uploaded_path)}`")
+            st.caption("Click button below or type a query to identify location, read signage & discover nearest landmarks.")
             if st.button("🔍 Identify Location & Nearest Landmarks", use_container_width=True):
                 st.session_state.active_query = "Identify this campus photo, read any visible signage, and tell me the nearest landmarks."
 
