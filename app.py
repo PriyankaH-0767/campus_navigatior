@@ -1,7 +1,7 @@
 """
-Smart Campus Explorer AI — Presidency Campus Guide
-Multimodal AI Campus Assistant with Interactive Plotly Route Navigation,
-Grounded Text RAG, Google Gemini Multimodal Vision, and Diffusion Visual Generation.
+CampusDrive — Presidency AI Campus Assistant
+Clean, unified multimodal campus guide with interactive 2D route map,
+semantic text Q&A, Google Gemini vision analysis, and illustrative visual generation.
 """
 
 import os
@@ -13,24 +13,23 @@ import plotly.graph_objects as go
 from PIL import Image
 
 from core.multimodal_assistant import CampusAssistant
-from core.evaluator import CampusEvaluator
 
 # Page Configuration
 st.set_page_config(
-    page_title="Smart Campus Explorer AI • Presidency Guide",
+    page_title="CampusDrive — Presidency Campus Assistant",
     page_icon="🧭",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # -----------------------------------------------------------------------------
-# HIGH-CONTRAST ACCESSIBLE STYLING (Theme-Resilient: Zero Hover Dependency)
+# HIGH-CONTRAST ACCESSIBLE STYLING (Guaranteed Zero Black Boxes & Uniform Text)
 # -----------------------------------------------------------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* Force universal clean background and high-contrast dark text */
+/* Force clean light theme and high-contrast dark text universally */
 html, body, [class*="css"], .stApp {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     background-color: #F8FAFC !important;
@@ -51,14 +50,14 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
 
 /* Hero Header */
 .hero-header {
-    background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F766E 100%) !important;
-    padding: 1.4rem 1.8rem;
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 55%, #0284C7 100%) !important;
+    padding: 1.4rem 2rem;
     border-radius: 16px;
     margin-bottom: 1.2rem;
-    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
 }
 .hero-title, .hero-title * {
-    font-size: 1.85rem !important;
+    font-size: 2rem !important;
     font-weight: 800 !important;
     color: #FFFFFF !important;
     margin: 0;
@@ -66,16 +65,15 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
 }
 .hero-sub, .hero-sub * {
     font-size: 0.95rem !important;
-    color: #CBD5E1 !important;
+    color: #E2E8F0 !important;
     margin-top: 0.35rem;
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.6rem;
 }
 
 /* Status Badges */
-.badge-verified { background: #10B981 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
-.badge-rag { background: #0EA5E9 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
-.badge-gemini { background: #F59E0B !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
-.badge-diffusion { background: #8B5CF6 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; }
+.badge-nav { background: #10B981 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
+.badge-vlm { background: #0284C7 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
+.badge-rag { background: #8B5CF6 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; }
 
 /* Streamlit Chat Messages: High visibility card */
 [data-testid="stChatMessage"] {
@@ -85,7 +83,7 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
     border-radius: 12px !important;
     padding: 14px 16px !important;
     margin-bottom: 10px !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
 }
 [data-testid="stChatMessage"] * {
     color: #0F172A !important;
@@ -96,7 +94,7 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
     line-height: 1.6 !important;
 }
 
-/* Step Boxes */
+/* Step Boxes for Navigation */
 .step-box {
     background: #FFFFFF !important;
     border-left: 5px solid #10B981 !important;
@@ -127,6 +125,89 @@ p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .
     font-family: monospace !important;
     display: inline-block !important;
     margin-top: 4px !important;
+}
+
+/* Active Image Context Banner */
+.active-photo-card {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* OVERRIDE ALL DARK/BLACK WIDGET BOXES */
+div[data-baseweb="select"] > div,
+div[data-baseweb="select"] input,
+div[data-baseweb="select"] span {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 8px !important;
+}
+div[data-baseweb="popover"] div,
+div[data-baseweb="popover"] ul,
+div[data-baseweb="popover"] li {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+}
+li[role="option"]:hover, li[aria-selected="true"] {
+    background-color: #EFF6FF !important;
+    color: #1D4ED8 !important;
+}
+
+/* File Uploader styling */
+[data-testid="stFileUploader"] {
+    background-color: #FFFFFF !important;
+    border: 2px dashed #93C5FD !important;
+    border-radius: 12px !important;
+    padding: 12px !important;
+}
+[data-testid="stFileUploader"] section {
+    background-color: #F8FAFC !important;
+}
+[data-testid="stFileUploader"] section * {
+    color: #334155 !important;
+}
+
+/* Chat Input Bar */
+[data-testid="stChatInput"] {
+    background-color: #FFFFFF !important;
+    border: 1.5px solid #CBD5E1 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06) !important;
+}
+[data-testid="stChatInput"] textarea {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    font-size: 0.95rem !important;
+}
+[data-testid="stChatInput"] textarea::placeholder {
+    color: #64748B !important;
+}
+
+/* Buttons */
+button[kind="primary"] {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+button[kind="secondary"] {
+    background-color: #FFFFFF !important;
+    color: #1E293B !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+button[kind="secondary"]:hover {
+    background-color: #EFF6FF !important;
+    color: #1D4ED8 !important;
+    border-color: #93C5FD !important;
 }
 
 /* Sidebar styling */
@@ -234,7 +315,7 @@ DOMAIN_CATEGORIES = {
     ]
 }
 
-# Primary landmark anchors displayed permanently without text overlap
+# Key landmark anchors displayed permanently without text overlap
 PRIMARY_LANDMARKS = {
     "FOUNTAIN", "University Entrance", "ENGINEERING_BLOCK", "ADMISSION_BLOCK",
     "D_BLOCK", "SCHOOL_OF_DESIGN", "SCHOOL_OF_LAW", "SPORTS_AREA",
@@ -294,7 +375,7 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
         clean_name = node_id.replace("_", " ")
         hovers.append(f"<b>{clean_name}</b><br>🏷️ Category: {category}<br>🏢 Floor: {floor}<br>📝 {desc}")
 
-        # Label resolution: only display text on key landmarks or active path to avoid overlap
+        # Selective label logic to prevent visual text clumping
         if node_id == start_node:
             colors.append("#2563EB")  # Blue for Start
             sizes.append(22)
@@ -342,7 +423,7 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
     return fig
 
 # -----------------------------------------------------------------------------
-# INITIALIZE ASSISTANT ENGINE
+# INITIALIZE ASSISTANT ENGINE & CONVERSATION STATE
 # -----------------------------------------------------------------------------
 if "assistant" not in st.session_state:
     st.session_state.assistant = CampusAssistant()
@@ -351,9 +432,12 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "👋 Welcome to **Smart Campus Explorer AI**! I am your multimodal campus guide.\n\n"
-                       "Ask me about any building, floor location, food stall, navigate to any facility with verified landmarks, "
-                       "upload photos for Google Gemini visual recognition and nearest landmark discovery, or request conceptual architectural illustrations.",
+            "content": "👋 Welcome to **CampusDrive**! I am your AI campus guide.\n\n"
+                       "You can:\n"
+                       "• **Ask campus questions:** buildings, floors, food stalls, faculties, and facilities.\n"
+                       "• **Get verified directions:** enter your starting point and destination for landmark guidance.\n"
+                       "• **Upload or choose a campus photo:** I will identify the building, read visible signs, show nearest landmarks, and let you ask follow-up questions.\n"
+                       "• **Request visual illustrations:** ask to generate an illustrative scene of any campus facility.",
             "citations": ["[campus_directions.pdf, Page 1]"],
             "route_result": None,
             "generated_image": None
@@ -366,14 +450,17 @@ if "last_route" not in st.session_state:
 if "last_gen_image" not in st.session_state:
     st.session_state.last_gen_image = None
 
+if "active_image" not in st.session_state:
+    st.session_state.active_image = None
+
 assistant = st.session_state.assistant
 
 # -----------------------------------------------------------------------------
-# SIDEBAR: CLICKABLE DOMAINS, ROUTE SELECTOR, GEMINI KEY & CONTROLS
+# SIDEBAR: QUICK ROUTE PLANNER, DIRECTORY & GEMINI KEY
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 Quick Route Planner")
-    st.caption("Select locations from the dropdowns to compute verified paths:")
+    st.caption("Select origin and destination to compute verified paths:")
 
     node_keys = sorted(list(CAMPUS_COORDINATES.keys()))
     start_default_idx = node_keys.index("FOUNTAIN") if "FOUNTAIN" in node_keys else 0
@@ -400,20 +487,8 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.markdown("### 🤖 Google Gemini Vision Integration")
-    gemini_key_input = st.text_input(
-        "🔑 Gemini API Key (Optional)",
-        type="password",
-        value=os.environ.get("GEMINI_API_KEY", ""),
-        help="Provide your Google Gemini API key to activate live Gemini 2.5 Flash Multimodal Vision on uploaded photos."
-    )
-    if gemini_key_input:
-        st.session_state["gemini_api_key"] = gemini_key_input
-        assistant.vlm_engine.api_key = gemini_key_input
-
-    st.markdown("---")
-    st.markdown("### 🏫 Clickable Campus Domains")
-    st.caption("Browse registered facilities by category:")
+    st.markdown("### 🏫 Campus Directory")
+    st.caption("Browse registered facilities by domain:")
 
     for category_name, facilities in DOMAIN_CATEGORIES.items():
         with st.expander(category_name, expanded=False):
@@ -440,27 +515,21 @@ with st.sidebar:
                         st.rerun()
 
     st.markdown("---")
-    st.markdown("### ⚙️ Experimental Parameters")
-    with st.expander("🛠️ Retrieval & Model Controls", expanded=False):
-        chunk_size = st.select_slider("RAG Chunk Size (words)", options=[100, 180, 300], value=180)
-        top_k = st.slider("Top-k Retrieval", min_value=1, max_value=5, value=3)
-        sim_method = st.selectbox("Similarity Metric", ["cosine", "dot_product"], index=0)
-        temperature = st.slider("Temperature", min_value=0.0, max_value=1.0, value=0.2, step=0.05)
-
-        assistant.rag_engine.chunk_size = chunk_size
-        assistant.rag_engine.top_k = top_k
-        assistant.rag_engine.similarity_method = sim_method
-        assistant.rag_engine.temperature = temperature
+    st.markdown("### 🤖 Google Gemini Vision")
+    gemini_key_input = st.text_input(
+        "🔑 Gemini API Key (Optional)",
+        type="password",
+        value=os.environ.get("GEMINI_API_KEY", ""),
+        help="Provide your Google Gemini API key to activate live Gemini 2.5 Flash Multimodal Vision."
+    )
+    if gemini_key_input:
+        st.session_state["gemini_api_key"] = gemini_key_input
+        assistant.vlm_engine.api_key = gemini_key_input
 
     st.markdown("---")
-    st.markdown("### 📊 Benchmark & Evaluation")
-    if st.button("▶️ Run Automated Audit (16 Tests)", use_container_width=True):
-        evaluator = CampusEvaluator(assistant)
-        eval_res = evaluator.run_benchmark()
-        st.success(f"Audit Complete! Overall Accuracy: {eval_res['metrics']['overall_accuracy']*100:.1f}% | Path Validity: {eval_res['metrics']['nav_path_validity']*100:.1f}%")
-
-    if st.button("🔄 Reset Chat & Location", use_container_width=True):
+    if st.button("🔄 New Conversation", use_container_width=True):
         assistant.session_source = None
+        st.session_state.active_image = None
         st.session_state.messages = st.session_state.messages[:1]
         st.session_state.last_route = None
         st.session_state.last_gen_image = None
@@ -471,13 +540,12 @@ with st.sidebar:
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div class="hero-header">
-    <div class="hero-title">🧭 Smart Campus Explorer AI • Presidency Guide</div>
-    <div class="hero-sub">Multimodal Campus Assistant • Grounded PDF RAG • Gemini Multimodal Vision • Verified Landmark Navigation • Diffusion Generative Visuals</div>
+    <div class="hero-title">🧭 CampusDrive</div>
+    <div class="hero-sub">Intelligent Campus Guide • Verified Landmark Navigation • Multimodal Vision Assistant</div>
     <div>
-        <span class="badge-verified">✅ 100% Path Validity Guaranteed</span>
-        <span class="badge-rag">📄 Grounded PDF RAG</span>
-        <span class="badge-gemini">👁️ Gemini Vision / VLM</span>
-        <span class="badge-diffusion">🎨 Diffusion Scene Synthesis</span>
+        <span class="badge-nav">🚶 Verified Navigation</span>
+        <span class="badge-vlm">👁️ Multimodal Vision</span>
+        <span class="badge-rag">📄 Grounded Campus Facts</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -489,10 +557,10 @@ col_chat, col_output = st.columns([5, 6], gap="medium")
 
 # ==================== LEFT COLUMN: CHATBOT UI ====================
 with col_chat:
-    st.markdown("#### 💬 Multimodal Campus Chatbot")
+    st.markdown("#### 💬 CampusDrive Assistant")
 
     # Quick prompt pills
-    st.caption("💡 Quick prompts to try:")
+    st.caption("💡 Suggested questions:")
     qp_cols = st.columns(3)
     with qp_cols[0]:
         if st.button("Floor of Design?", use_container_width=True):
@@ -505,22 +573,43 @@ with col_chat:
             st.session_state.active_query = "Generate an illustration of the campus entrance"
 
     # Chat Messages Scroll Area
-    chat_container = st.container(height=460)
+    chat_container = st.container(height=450)
     with chat_container:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 if msg.get("uploaded_image") and os.path.exists(msg["uploaded_image"]):
-                    st.image(msg["uploaded_image"], caption="📷 Uploaded Campus Photo", width=280)
+                    st.image(msg["uploaded_image"], caption=f"📷 {os.path.basename(msg['uploaded_image'])}", width=260)
                 st.markdown(msg["content"])
                 if msg.get("citations"):
                     st.markdown(" ".join([f"<span class='citation-pill'>{c}</span>" for c in msg["citations"]]), unsafe_allow_html=True)
                 if msg.get("generated_image") and os.path.exists(msg["generated_image"]):
-                    st.image(msg["generated_image"], caption="🎨 Diffusion Generated Visual Aid", use_container_width=True)
+                    st.image(msg["generated_image"], caption="🎨 Illustrative Visual Aid", use_container_width=True)
 
-    # Image File Uploader & Disk Cache
-    # Image Input: File Uploader or Sample Preset Selector
+    # ACTIVE IMAGE BANNER & MULTIMODAL FOLLOW-UP CONTROLS
+    if st.session_state.active_image and os.path.exists(st.session_state.active_image):
+        with st.container():
+            st.markdown("""
+            <div style="background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px;">
+                <span style="font-weight: 700; color: #1D4ED8;">🖼️ Active Photo in Focus:</span>
+                <span style="color: #1E293B; font-weight: 500;">Ask any follow-up questions about visible signs, doors, floors, or navigate from here!</span>
+            </div>
+            """, unsafe_allow_html=True)
+            col_act1, col_act2, col_act3 = st.columns([2, 5, 3])
+            with col_act1:
+                st.image(st.session_state.active_image, width=70)
+            with col_act2:
+                st.markdown(f"**Focus:** `{os.path.basename(st.session_state.active_image)}`")
+                if assistant.session_source:
+                    loc_label = assistant.nav_graph.graph.nodes.get(assistant.session_source, {}).get("name", assistant.session_source)
+                    st.caption(f"📍 Location set to: **{loc_label}**")
+            with col_act3:
+                if st.button("❌ Remove Photo", use_container_width=True, help="Switch back to text-only mode"):
+                    st.session_state.active_image = None
+                    st.rerun()
+
+    # Image Input Section: File Uploader or Preset Selection
     sample_photos = {
-        "-- Or pick a verified campus photo to test --": None,
+        "-- Or pick an official campus photo to analyze --": None,
         "🏛️ Admin Block (Main Atrium)": "data/sample_images/admin_block.jpg",
         "📋 Office of the Registrar (Counter Signs)": "data/sample_images/office_of_the_registrar.jpg",
         "🎨 School of Design (D Block Floor 5)": "data/sample_images/school_of_design.jpg",
@@ -533,31 +622,29 @@ with col_chat:
         "🎬 School of Media Studies (TV Studio)": "data/sample_images/media_studies.jpg"
     }
 
-    uploaded_photo = st.file_uploader("📷 Upload a campus photo or facility picture", type=["jpg", "jpeg", "png"], key="uploader_main")
-    selected_sample = st.selectbox("🖼️ Or test with an official campus photograph:", options=list(sample_photos.keys()), index=0)
+    with st.expander("📷 Upload a Photo or Pick a Campus Landmark Photo", expanded=(st.session_state.active_image is None)):
+        uploaded_file = st.file_uploader("Upload your campus photo:", type=["jpg", "jpeg", "png"], key="uploader_widget")
+        selected_preset = st.selectbox("Or choose a verified campus photo:", options=list(sample_photos.keys()), index=0)
 
-    uploaded_path = None
-    if uploaded_photo is not None:
-        upload_dir = os.path.join("data", "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-        uploaded_path = os.path.join(upload_dir, uploaded_photo.name)
-        with open(uploaded_path, "wb") as f:
-            f.write(uploaded_photo.getbuffer())
-    elif sample_photos.get(selected_sample):
-        uploaded_path = sample_photos[selected_sample]
+        new_image_path = None
+        if uploaded_file is not None:
+            upload_dir = os.path.join("data", "uploads")
+            os.makedirs(upload_dir, exist_ok=True)
+            new_image_path = os.path.join(upload_dir, uploaded_file.name)
+            with open(new_image_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+        elif sample_photos.get(selected_preset):
+            new_image_path = sample_photos[selected_preset]
 
-    if uploaded_path and os.path.exists(uploaded_path):
-        col_prev1, col_prev2 = st.columns([1, 2])
-        with col_prev1:
-            st.image(uploaded_path, caption="📷 Ready to Analyze", width=140)
-        with col_prev2:
-            st.markdown(f"**Photo Selected:** `{os.path.basename(uploaded_path)}`")
-            st.caption("Click button below or type a query to identify location, read signage & discover nearest landmarks.")
-            if st.button("🔍 Identify Location & Nearest Landmarks", use_container_width=True):
-                st.session_state.active_query = "Identify this campus photo, read any visible signage, and tell me the nearest landmarks."
+        if new_image_path and os.path.exists(new_image_path) and new_image_path != st.session_state.active_image:
+            st.session_state.active_image = new_image_path
+            st.success(f"Loaded: {os.path.basename(new_image_path)}")
+            # Trigger immediate analysis
+            st.session_state.active_query = "Identify this campus photo, read any visible signage, and tell me the nearest landmarks."
+            st.rerun()
 
     # Chat Input Box
-    query_input = st.chat_input("Ask about buildings, floors, food stalls, routes, or upload a photo...")
+    query_input = st.chat_input("Ask about buildings, routes, or ask follow-ups on the active photo...")
 
     if "active_query" in st.session_state and st.session_state.active_query:
         query_input = st.session_state.active_query
@@ -565,17 +652,18 @@ with col_chat:
 
     if query_input:
         # Append User Message
+        active_img = st.session_state.active_image
         st.session_state.messages.append({
             "role": "user",
             "content": query_input,
-            "uploaded_image": uploaded_path
+            "uploaded_image": active_img
         })
 
-        # Process Query with Multimodal Assistant Engine
-        with st.spinner("Analyzing with Gemini Vision & Multimodal Campus Engine..."):
+        # Process Query with CampusDrive Multimodal Engine
+        with st.spinner("CampusDrive is processing your query..."):
             resp = assistant.process_query(
                 query_input,
-                uploaded_image=uploaded_path,
+                uploaded_image=active_img,
                 api_key=st.session_state.get("gemini_api_key")
             )
 
@@ -595,7 +683,7 @@ with col_chat:
 
 # ==================== RIGHT COLUMN: OUTPUT WINDOW & VISUALS ====================
 with col_output:
-    st.markdown("#### 🗺️ Live Output Window & Navigation Visualizer")
+    st.markdown("#### 🗺️ Interactive Campus Map & Guidance")
 
     # Render Interactive Plotly Campus Map
     active_route_nodes = []
@@ -625,16 +713,16 @@ with col_output:
                 vertical_info = " 🛗 [Elevator/Stairs]" if s.get('is_vertical') else ""
                 st.markdown(f"<div class='step-box'><b>Step {s['step_number']}:</b> {s['instruction']}{landmark_info}{vertical_info}</div>", unsafe_allow_html=True)
 
-    # Output Card 2: Generated Diffusion Visual Aid if available
+    # Output Card 2: Generated Visual Aid if available
     elif st.session_state.last_gen_image and os.path.exists(st.session_state.last_gen_image):
         with st.container():
-            st.markdown("##### 🎨 Diffusion Generative Campus Visual Aid")
+            st.markdown("##### 🎨 Campus Illustration")
             st.image(st.session_state.last_gen_image, caption="⚠️ Illustrative Conceptual Visual Aid — Not Verified Route Geometry", use_container_width=True)
 
     # Output Card 3: Default Campus Directory Overview
     else:
         with st.container():
-            st.markdown("##### 🏛️ Verified Campus Reference Facts")
+            st.markdown("##### 🏛️ Verified Campus Reference Directory")
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 st.markdown("""

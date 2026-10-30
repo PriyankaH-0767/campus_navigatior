@@ -53,30 +53,41 @@ class CampusAssistant:
         self.conversation_history: List[Dict[str, str]] = []
 
     def classify_intent(self, query: str, has_image: bool = False) -> str:
-        """Classifies query intent into NAV, RAG, CLIP_SEARCH, VLM, GEN, or MIXED."""
+        """Classifies query intent into NAV, RAG, CLIP_SEARCH, VLM, GEN_ILLUSTRATION, or MIXED."""
         q = query.lower()
 
-        if has_image and ("how do i reach" in q or "how to get" in q or "guide me" in q):
-            return "MIXED"
-
-        if "generate" in q or "illustration" in q or "illustrative" in q or "draw" in q or "visual scene" in q:
+        # 1. User wants an illustrative scene or image generation
+        gen_triggers = ["generate", "illustration", "illustrative", "draw", "visual scene", "visualize", "show me an illustration", "create an image", "image output", "give me image"]
+        if any(t in q for t in gen_triggers):
             return "GEN_ILLUSTRATION"
 
-        if has_image or ("signs" in q and "photo" in q) or ("visible" in q and "photo" in q):
-            return "VLM_ANALYSIS"
+        # 2. Navigation keywords
+        nav_triggers = ["how do i reach", "how to reach", "how to go", "how do i go", "guide me to", "directions to", "route to", "way to"]
 
-        if "photo" in q or "picture" in q or "resemble" in q or "look like" in q or "image of" in q:
+        # 3. If an image is active and user asks for navigation -> MIXED
+        if has_image and any(t in q for t in nav_triggers):
+            return "MIXED"
+
+        # 4. If an image is active and user asks questions about it or follow-ups -> VLM_ANALYSIS
+        vlm_triggers = ["sign", "visible", "photo", "picture", "this place", "what is this", "where is this", "identify", "door", "entrance", "floor", "notice", "plaque", "board", "counter", "atm", "room", "building", "corridor"]
+        if has_image:
+            if any(t in q for t in vlm_triggers) or q.strip() in ["", "where am i", "identify this", "what is this", "read signs"]:
+                return "VLM_ANALYSIS"
+            if any(t in q for t in nav_triggers):
+                return "MIXED"
+            # If query does not look like a general campus catalog fact question, analyze the image
+            if not any(t in q for t in ["food stall", "canteen", "course", "fee", "timing", "admission", "sports area"]):
+                return "VLM_ANALYSIS"
+
+        # 5. Image search request without an active image
+        if ("photo of" in q or "picture of" in q or "resemble" in q or "look like" in q) and not any(t in q for t in gen_triggers):
             return "CLIP_SEARCH"
 
-        # Check navigation keywords
-        nav_triggers = ["how do i reach", "how to reach", "how to go", "how do i go", "guide me to", "directions to", "route to", "way to"]
-        if any(t in q for t in nav_triggers):
+        # 6. Text Navigation request
+        if any(t in q for t in nav_triggers) or re.search(r'\bi am (in|at|near)\b', q):
             return "NAV"
 
-        # Check explicit location declaration e.g. "I am in D block"
-        if re.search(r'\bi am (in|at|near)\b', q):
-            return "NAV"
-
+        # 7. Default to Grounded Text RAG
         return "RAG"
 
     def extract_navigation_entities(self, query: str) -> Tuple[Optional[str], Optional[str]]:
@@ -267,22 +278,33 @@ class CampusAssistant:
                         nearest_landmarks.append(n_name)
 
             loc_name = self.nav_graph.graph.nodes.get(matched_loc, {}).get("name", vlm_res.get("matched_location_name", matched_loc))
-            landmarks_str = "\n".join([f"  • {lm}" for lm in nearest_landmarks[:4]]) if nearest_landmarks else "  • Central campus concourse"
+            landmarks_str = "\n".join([f"  • {lm}" for lm in nearest_landmarks[:4]]) if nearest_landmarks else "  • Central campus walkway"
 
-            ans_lines = [
-                f"📍 **Identified Location:** **{loc_name}**",
-                f"🧠 **Vision Analysis ({vlm_res.get('model_used', 'Gemini Vision / VLM')}):**",
-                f"{vlm_res['observation']}",
-                "",
-                f"🏷️ **Detected Signs:** {', '.join(vlm_res['ocr_detected'])}",
-                "",
-                f"🏛️ **Nearest Landmarks & Junctions:**",
-                f"{landmarks_str}",
-                "",
-                f"💡 *Starting location set to **{loc_name}**. Ask me 'How do I reach the School of Design?' or any destination to navigate!*",
-                "",
-                f"📌 *Note: {vlm_res.get('source_citation', '[campus_images.pdf]')}*"
-            ]
+            # Check if user specifically asked about signs or landmarks
+            q_low = query.lower()
+            if "sign" in q_low or "read" in q_low or "text" in q_low:
+                signs_list = ", ".join([f"'{s}'" for s in vlm_res['ocr_detected']])
+                ans_lines = [
+                    f"🏷️ **Visible Signage in Photo:** {signs_list}",
+                    "",
+                    f"📍 **Identified Location:** **{loc_name}**",
+                    f"🏛️ **Nearest Landmarks:** {', '.join([lm.split('(')[0].strip() for lm in nearest_landmarks[:3]])}",
+                    "",
+                    f"💡 *Ask me any follow-up question or request directions to any building!*"
+                ]
+            else:
+                ans_lines = [
+                    f"📍 **Identified Location:** **{loc_name}**",
+                    "",
+                    f"👁️ **Visual Details:** {vlm_res['observation']}",
+                    "",
+                    f"🏷️ **Visible Signage:** {', '.join(vlm_res['ocr_detected'])}",
+                    "",
+                    f"🏛️ **Nearest Landmarks & Accessible Paths:**",
+                    f"{landmarks_str}",
+                    "",
+                    f"💡 *Starting point set to **{loc_name}**. Ask any follow-up question or say 'Guide me to...' to navigate!*"
+                ]
             response_payload["answer"] = "\n".join(ans_lines)
             return response_payload
 
@@ -292,15 +314,14 @@ class CampusAssistant:
             response_payload["visual_illustration"] = gen_res
             response_payload["generated_image_path"] = gen_res.get("image_path")
             response_payload["answer"] = (
-                f"🎨 **Generated Visual Guide ({gen_res.get('model_type', 'Diffusion Model')}):** {gen_res['scene_title']}.\n\n"
-                f"📝 **Diffusion Prompt:** *\"{gen_res.get('diffusion_prompt', query)}\"*\n\n"
-                f"{gen_res['disclaimer']}"
+                f"🎨 **Campus Illustration:** {gen_res['scene_title']}\n\n"
+                f"*(Illustrative visual aid — not verified route geometry)*"
             )
             return response_payload
 
         # Branch 5: Mixed Multimodal Query (Image ID + Navigation)
         elif intent == "MIXED":
-            # Image recognition with Gemini / VLM -> location resolution -> graph routing
+            # Image recognition -> location resolution -> graph routing
             img_ref = uploaded_image or "campus_img_admin_block"
             vlm_res = self.vlm_engine.analyze_image_query(img_ref, query, api_key=api_key)
             matched_loc = vlm_res.get("catalogue_matched_location", "ADMISSION_BLOCK")
@@ -315,9 +336,8 @@ class CampusAssistant:
             route_text = self.nav_graph.generate_natural_directions(route_res)
 
             response_payload["answer"] = (
-                f"1. **Visual Location Identification ({vlm_res.get('model_used', 'Gemini Vision / VLM')}):**\n"
-                f"From the image evidence, the building is identified as **{loc_name}**.\n\n"
-                f"2. **Verified Navigation:**\n{route_text}"
+                f"📍 **Location Identified:** **{loc_name}**\n\n"
+                f"{route_text}"
             )
             response_payload["route_result"] = route_res
             if route_res.get("success"):
