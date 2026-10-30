@@ -150,7 +150,7 @@ class CampusAssistant:
 
         return final_source, extracted_dest
 
-    def process_query(self, query: str, uploaded_image: Optional[str] = None) -> Dict[str, Any]:
+    def process_query(self, query: str, uploaded_image: Optional[str] = None, api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Main multimodal query processing pipeline.
         Dispatches to appropriate branch and composes evidence-aware response.
@@ -246,16 +246,44 @@ class CampusAssistant:
                 response_payload["citations"] = [top_m["citation"]]
             return response_payload
 
-        # Branch 3: VLM Analysis
+        # Branch 3: VLM Analysis (Gemini Multimodal Vision + Nearest Landmarks)
         elif intent == "VLM_ANALYSIS":
             img_ref = uploaded_image or "campus_img_registrar_office"
-            vlm_res = self.vlm_engine.analyze_image_query(img_ref, query)
+            vlm_res = self.vlm_engine.analyze_image_query(img_ref, query, api_key=api_key)
             response_payload["vlm_result"] = vlm_res
-            response_payload["answer"] = (
-                f"👁️ **Visual Observation:** {vlm_res['observation']}\n\n"
-                f"🏷️ **Detected Signs:** {', '.join(vlm_res['ocr_detected'])}\n\n"
+            matched_loc = vlm_res.get("catalogue_matched_location", "ADMISSION_BLOCK")
+            self.session_source = matched_loc
+
+            # Extract nearest landmarks from campus graph
+            nearest_landmarks = []
+            if matched_loc in self.nav_graph.graph:
+                for n in self.nav_graph.graph.neighbors(matched_loc):
+                    edge_data = self.nav_graph.graph.get_edge_data(matched_loc, n) or {}
+                    lmark = edge_data.get("landmark")
+                    n_name = self.nav_graph.graph.nodes[n].get("name", n)
+                    if lmark:
+                        nearest_landmarks.append(f"{n_name} (*{lmark}*)")
+                    else:
+                        nearest_landmarks.append(n_name)
+
+            loc_name = self.nav_graph.graph.nodes.get(matched_loc, {}).get("name", vlm_res.get("matched_location_name", matched_loc))
+            landmarks_str = "\n".join([f"  • {lm}" for lm in nearest_landmarks[:4]]) if nearest_landmarks else "  • Central campus concourse"
+
+            ans_lines = [
+                f"📍 **Identified Location:** **{loc_name}**",
+                f"🧠 **Vision Analysis ({vlm_res.get('model_used', 'Gemini Vision / VLM')}):**",
+                f"{vlm_res['observation']}",
+                "",
+                f"🏷️ **Detected Signs:** {', '.join(vlm_res['ocr_detected'])}",
+                "",
+                f"🏛️ **Nearest Landmarks & Junctions:**",
+                f"{landmarks_str}",
+                "",
+                f"💡 *Starting location set to **{loc_name}**. Ask me 'How do I reach the School of Design?' or any destination to navigate!*",
+                "",
                 f"📌 *Note: {vlm_res.get('source_citation', '[campus_images.pdf]')}*"
-            )
+            ]
+            response_payload["answer"] = "\n".join(ans_lines)
             return response_payload
 
         # Branch 4: Visual Scene Generation (Diffusion Model)
@@ -270,13 +298,14 @@ class CampusAssistant:
             )
             return response_payload
 
-        # Branch 5: Mixed Multimodal Query
+        # Branch 5: Mixed Multimodal Query (Image ID + Navigation)
         elif intent == "MIXED":
-            # Image recognition -> location resolution -> graph routing
+            # Image recognition with Gemini / VLM -> location resolution -> graph routing
             img_ref = uploaded_image or "campus_img_admin_block"
-            vlm_res = self.vlm_engine.analyze_image_query(img_ref, query)
+            vlm_res = self.vlm_engine.analyze_image_query(img_ref, query, api_key=api_key)
             matched_loc = vlm_res.get("catalogue_matched_location", "ADMISSION_BLOCK")
             self.session_source = matched_loc
+            loc_name = self.nav_graph.graph.nodes.get(matched_loc, {}).get("name", matched_loc)
 
             # Extract destination
             _, dest = self.extract_navigation_entities(query)
@@ -286,7 +315,8 @@ class CampusAssistant:
             route_text = self.nav_graph.generate_natural_directions(route_res)
 
             response_payload["answer"] = (
-                f"1. **Visual Location Identification:** From the image evidence, the building resembles **{self.nav_graph.graph.nodes.get(matched_loc, {}).get('name', matched_loc)}**.\n\n"
+                f"1. **Visual Location Identification ({vlm_res.get('model_used', 'Gemini Vision / VLM')}):**\n"
+                f"From the image evidence, the building is identified as **{loc_name}**.\n\n"
                 f"2. **Verified Navigation:**\n{route_text}"
             )
             response_payload["route_result"] = route_res

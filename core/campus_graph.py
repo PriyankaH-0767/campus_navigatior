@@ -522,8 +522,7 @@ class CampusNavigationGraph:
         steps = route_result["steps"]
 
         lines = [
-            f"🚶 **Verified Route from {source_name} to {dest_name}**",
-            f"📏 Total walking distance: ~{total_dist} meters ({len(steps)} verified path segments)",
+            f"🚶 **Verified Route from {source_name} to {dest_name}** ({len(steps)} verified path segments)",
             ""
         ]
 

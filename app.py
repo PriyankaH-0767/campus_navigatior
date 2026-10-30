@@ -1,7 +1,7 @@
 """
 Smart Campus Explorer AI — Presidency Campus Guide
 Multimodal AI Campus Assistant with Interactive Plotly Route Navigation,
-Grounded Text RAG, Diffusion Visual Generation, and Domain Sidebars.
+Grounded Text RAG, Google Gemini Multimodal Vision, and Diffusion Visual Generation.
 """
 
 import os
@@ -24,97 +24,117 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# HIGH-END STYLING (DM Sans, Glassmorphic Cards, Modern Layout)
+# HIGH-CONTRAST ACCESSIBLE STYLING (Theme-Resilient: Zero Hover Dependency)
 # -----------------------------------------------------------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-html, body, [class*="css"] {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+
+/* Force universal clean background and high-contrast dark text */
+html, body, [class*="css"], .stApp {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    background-color: #F8FAFC !important;
+    color: #0F172A !important;
 }
-.stApp {
-    background: #F8FAFC;
-    color: #0F172A;
+
+/* Ensure ALL markdown, paragraphs, headings, list items are 100% visible */
+p, span, label, div.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6, .stMarkdown li, .stMarkdown strong {
+    color: #0F172A !important;
+    font-weight: 500;
 }
+
 .block-container {
     padding-top: 1rem;
     padding-bottom: 2rem;
     max-width: 1750px;
 }
+
+/* Hero Header */
 .hero-header {
-    background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F766E 100%);
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F766E 100%) !important;
     padding: 1.4rem 1.8rem;
     border-radius: 16px;
-    color: white;
     margin-bottom: 1.2rem;
     box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);
 }
-.hero-title {
-    font-size: 1.85rem;
-    font-weight: 800;
-    color: #FFFFFF;
+.hero-title, .hero-title * {
+    font-size: 1.85rem !important;
+    font-weight: 800 !important;
+    color: #FFFFFF !important;
     margin: 0;
     letter-spacing: -0.02em;
 }
-.hero-sub {
-    font-size: 0.95rem;
-    color: #94A3B8;
+.hero-sub, .hero-sub * {
+    font-size: 0.95rem !important;
+    color: #CBD5E1 !important;
     margin-top: 0.35rem;
     margin-bottom: 0.8rem;
 }
-.badge-verified {
-    background: #10B981;
-    color: white;
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 6px;
-    display: inline-block;
-    margin-right: 6px;
+
+/* Status Badges */
+.badge-verified { background: #10B981 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
+.badge-rag { background: #0EA5E9 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
+.badge-gemini { background: #F59E0B !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; margin-right: 6px; }
+.badge-diffusion { background: #8B5CF6 !important; color: #FFFFFF !important; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; display: inline-block; }
+
+/* Streamlit Chat Messages: High visibility card */
+[data-testid="stChatMessage"] {
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 12px !important;
+    padding: 14px 16px !important;
+    margin-bottom: 10px !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
 }
-.badge-rag {
-    background: #0EA5E9;
-    color: white;
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 6px;
-    display: inline-block;
-    margin-right: 6px;
+[data-testid="stChatMessage"] * {
+    color: #0F172A !important;
 }
-.badge-diffusion {
-    background: #8B5CF6;
-    color: white;
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 6px;
-    display: inline-block;
+[data-testid="stChatMessage"] p {
+    color: #0F172A !important;
+    font-size: 0.96rem !important;
+    line-height: 1.6 !important;
 }
-.panel-card {
-    background: #FFFFFF;
-    border-radius: 14px;
-    padding: 1.2rem;
-    border: 1px solid #E2E8F0;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    margin-bottom: 1.2rem;
-}
-.citation-pill {
-    background: #F1F5F9;
-    color: #0369A1;
-    border: 1px solid #BAE6FD;
-    padding: 2px 7px;
-    border-radius: 5px;
-    font-size: 0.75rem;
-    font-family: monospace;
-}
+
+/* Step Boxes */
 .step-box {
-    background: #F8FAFC;
-    border-left: 4px solid #10B981;
-    padding: 8px 12px;
-    border-radius: 0 8px 8px 0;
-    margin-bottom: 6px;
-    font-size: 0.88rem;
+    background: #FFFFFF !important;
+    border-left: 5px solid #10B981 !important;
+    border-top: 1px solid #E2E8F0 !important;
+    border-right: 1px solid #E2E8F0 !important;
+    border-bottom: 1px solid #E2E8F0 !important;
+    padding: 12px 16px !important;
+    border-radius: 0 8px 8px 0 !important;
+    margin-bottom: 8px !important;
+    font-size: 0.92rem !important;
+    line-height: 1.5 !important;
+    color: #0F172A !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03) !important;
+}
+.step-box * {
+    color: #0F172A !important;
+}
+
+/* Citation Pill */
+.citation-pill {
+    background: #E0F2FE !important;
+    color: #0369A1 !important;
+    border: 1px solid #BAE6FD !important;
+    padding: 3px 8px !important;
+    border-radius: 6px !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    font-family: monospace !important;
+    display: inline-block !important;
+    margin-top: 4px !important;
+}
+
+/* Sidebar styling */
+[data-testid="stSidebar"] {
+    background-color: #F1F5F9 !important;
+}
+[data-testid="stSidebar"] * {
+    color: #0F172A !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -214,18 +234,25 @@ DOMAIN_CATEGORIES = {
     ]
 }
 
+# Primary landmark anchors displayed permanently without text overlap
+PRIMARY_LANDMARKS = {
+    "FOUNTAIN", "University Entrance", "ENGINEERING_BLOCK", "ADMISSION_BLOCK",
+    "D_BLOCK", "SCHOOL_OF_DESIGN", "SCHOOL_OF_LAW", "SPORTS_AREA",
+    "CENTRAL_LIBRARY", "AUDITORIUM", "L_BLOCK", "RD_CENTRE", "FOOD_STALLS_ADMISSION"
+}
+
 # -----------------------------------------------------------------------------
-# PLOTLY INTERACTIVE MAP BUILDER
+# PLOTLY INTERACTIVE MAP BUILDER (Clean, Non-Overlapping Labels)
 # -----------------------------------------------------------------------------
 def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_node=None, dest_node=None):
     """
     Renders an interactive 2D schematic campus map using Plotly.
-    Highlights confirmed background walkways and active shortest-path route.
+    Displays clear, non-overlapping labels only for major landmarks and active route waypoints.
     """
     active_route = active_route or []
     fig = go.Figure()
 
-    # 1. Background Walkable Paths (Light Slate Gray)
+    # 1. Background Walkable Paths (Slate Gray)
     for u, v in nav_graph.edges():
         if u in CAMPUS_COORDINATES and v in CAMPUS_COORDINATES:
             xu, yu, _, _, _ = CAMPUS_COORDINATES[u]
@@ -238,7 +265,7 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
                 showlegend=False
             ))
 
-    # 2. Highlighted Route Segments (Vibrant Emerald / Cyan)
+    # 2. Highlighted Route Segments (Vibrant Emerald)
     if len(active_route) > 1:
         rx, ry = [], []
         route_hover_texts = []
@@ -247,60 +274,69 @@ def make_interactive_campus_map(nav_graph: nx.Graph, active_route=None, start_no
                 x, y, cat, floor, desc = CAMPUS_COORDINATES[node_id]
                 rx.append(x)
                 ry.append(y)
-                route_hover_texts.append(f"<b>Step {i+1}: {node_id.replace('_', ' ')}</b><br>{desc}")
+                route_hover_texts.append(f"<b>Segment {i+1}: {node_id.replace('_', ' ')}</b><br>{desc}")
 
         fig.add_trace(go.Scatter(
             x=rx, y=ry,
             mode="lines+markers",
             line=dict(color="#10B981", width=6),
-            marker=dict(size=12, color="#10B981", line=dict(color="#FFFFFF", width=2)),
+            marker=dict(size=14, color="#10B981", line=dict(color="#FFFFFF", width=2)),
             name="Verified Route",
             text=route_hover_texts,
             hoverinfo="text"
         ))
 
-    # 3. Campus Location Nodes
-    xs, ys, node_names, colors, sizes, hovers = [], [], [], [], [], []
+    # 3. Campus Location Nodes & Selective Labels
+    xs, ys, display_labels, colors, sizes, hovers = [], [], [], [], [], []
     for node_id, (x, y, category, floor, desc) in CAMPUS_COORDINATES.items():
         xs.append(x)
         ys.append(y)
         clean_name = node_id.replace("_", " ")
-        node_names.append(clean_name)
         hovers.append(f"<b>{clean_name}</b><br>🏷️ Category: {category}<br>🏢 Floor: {floor}<br>📝 {desc}")
 
+        # Label resolution: only display text on key landmarks or active path to avoid overlap
         if node_id == start_node:
-            colors.append("#2563EB")  # Royal Blue for Start
-            sizes.append(20)
+            colors.append("#2563EB")  # Blue for Start
+            sizes.append(22)
+            display_labels.append(f"📍 START: {clean_name}")
         elif node_id == dest_node:
-            colors.append("#DC2626")  # Crimson Red for Destination
-            sizes.append(20)
+            colors.append("#DC2626")  # Red for Destination
+            sizes.append(22)
+            display_labels.append(f"🎯 DEST: {clean_name}")
         elif node_id in active_route:
-            colors.append("#10B981")  # Emerald for Route Waypoints
-            sizes.append(14)
+            colors.append("#10B981")  # Emerald for Active Path
+            sizes.append(15)
+            step_idx = active_route.index(node_id) + 1
+            display_labels.append(f"#{step_idx} {clean_name}")
+        elif node_id in PRIMARY_LANDMARKS:
+            colors.append("#475569")  # Dark Slate for Primary Landmarks
+            sizes.append(12)
+            display_labels.append(clean_name)
         else:
-            colors.append("#64748B")  # Muted Slate for others
-            sizes.append(10)
+            colors.append("#94A3B8")  # Subtle Slate for intermediate dots
+            sizes.append(9)
+            display_labels.append("")  # Blank label prevents visual collisions
 
     fig.add_trace(go.Scatter(
         x=xs, y=ys,
         mode="markers+text",
-        marker=dict(size=sizes, color=colors, line=dict(color="#FFFFFF", width=1.5)),
-        text=node_names,
+        marker=dict(size=sizes, color=colors, line=dict(color="#FFFFFF", width=2)),
+        text=display_labels,
         textposition="top center",
-        textfont=dict(size=9, color="#0F172A", family="Plus Jakarta Sans"),
+        textfont=dict(size=10, color="#0F172A", family="Plus Jakarta Sans"),
         hovertext=hovers,
         hoverinfo="text",
         showlegend=False
     ))
 
     fig.update_layout(
-        height=520,
+        height=540,
         margin=dict(l=15, r=15, t=15, b=15),
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#F8FAFC",
         xaxis=dict(visible=False, range=[15, 95], fixedrange=True),
         yaxis=dict(visible=False, range=[0, 108], fixedrange=True, scaleanchor="x"),
-        hoverlabel=dict(bgcolor="#0F172A", font_size=11, font_color="#FFFFFF"),
+        hoverlabel=dict(bgcolor="#0F172A", font_size=12, font_color="#FFFFFF"),
         showlegend=False
     )
     return fig
@@ -317,7 +353,7 @@ if "messages" not in st.session_state:
             "role": "assistant",
             "content": "👋 Welcome to **Smart Campus Explorer AI**! I am your multimodal campus guide.\n\n"
                        "Ask me about any building, floor location, food stall, navigate to any facility with verified landmarks, "
-                       "upload photos for visual recognition, or request conceptual architectural illustrations.",
+                       "upload photos for Google Gemini visual recognition and nearest landmark discovery, or request conceptual architectural illustrations.",
             "citations": ["[campus_directions.pdf, Page 1]"],
             "route_result": None,
             "generated_image": None
@@ -333,7 +369,7 @@ if "last_gen_image" not in st.session_state:
 assistant = st.session_state.assistant
 
 # -----------------------------------------------------------------------------
-# SIDEBAR: CLICKABLE DOMAINS, ROUTE SELECTOR & CONTROLS
+# SIDEBAR: CLICKABLE DOMAINS, ROUTE SELECTOR, GEMINI KEY & CONTROLS
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🧭 Quick Route Planner")
@@ -362,6 +398,18 @@ with st.sidebar:
             "generated_image": None
         })
         st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 🤖 Google Gemini Vision Integration")
+    gemini_key_input = st.text_input(
+        "🔑 Gemini API Key (Optional)",
+        type="password",
+        value=os.environ.get("GEMINI_API_KEY", ""),
+        help="Provide your Google Gemini API key to activate live Gemini 2.5 Flash Multimodal Vision on uploaded photos."
+    )
+    if gemini_key_input:
+        st.session_state["gemini_api_key"] = gemini_key_input
+        assistant.vlm_engine.api_key = gemini_key_input
 
     st.markdown("---")
     st.markdown("### 🏫 Clickable Campus Domains")
@@ -424,10 +472,11 @@ with st.sidebar:
 st.markdown("""
 <div class="hero-header">
     <div class="hero-title">🧭 Smart Campus Explorer AI • Presidency Guide</div>
-    <div class="hero-sub">Multimodal Campus Assistant • Grounded PDF RAG • Verified Landmark Navigation • Diffusion Generative Visuals</div>
+    <div class="hero-sub">Multimodal Campus Assistant • Grounded PDF RAG • Gemini Multimodal Vision • Verified Landmark Navigation • Diffusion Generative Visuals</div>
     <div>
         <span class="badge-verified">✅ 100% Path Validity Guaranteed</span>
         <span class="badge-rag">📄 Grounded PDF RAG</span>
+        <span class="badge-gemini">👁️ Gemini Vision / VLM</span>
         <span class="badge-diffusion">🎨 Diffusion Scene Synthesis</span>
     </div>
 </div>
@@ -456,24 +505,39 @@ with col_chat:
             st.session_state.active_query = "Generate an illustration of the campus entrance"
 
     # Chat Messages Scroll Area
-    chat_container = st.container(height=450)
+    chat_container = st.container(height=460)
     with chat_container:
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
+                if msg.get("uploaded_image") and os.path.exists(msg["uploaded_image"]):
+                    st.image(msg["uploaded_image"], caption="📷 Uploaded Campus Photo", width=280)
                 st.markdown(msg["content"])
                 if msg.get("citations"):
                     st.markdown(" ".join([f"<span class='citation-pill'>{c}</span>" for c in msg["citations"]]), unsafe_allow_html=True)
                 if msg.get("generated_image") and os.path.exists(msg["generated_image"]):
                     st.image(msg["generated_image"], caption="🎨 Diffusion Generated Visual Aid", use_container_width=True)
 
-    # Image File Uploader
-    uploaded_photo = st.file_uploader("📷 Upload a campus photo or map snippet (Optional)", type=["jpg", "jpeg", "png"], key="uploader_main")
-    uploaded_name = uploaded_photo.name if uploaded_photo else None
-    if uploaded_photo:
-        st.info(f"Photo attached: **{uploaded_name}**")
+    # Image File Uploader & Disk Cache
+    uploaded_photo = st.file_uploader("📷 Upload a campus photo or facility picture", type=["jpg", "jpeg", "png"], key="uploader_main")
+    uploaded_path = None
+    if uploaded_photo is not None:
+        upload_dir = os.path.join("data", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        uploaded_path = os.path.join(upload_dir, uploaded_photo.name)
+        with open(uploaded_path, "wb") as f:
+            f.write(uploaded_photo.getbuffer())
+        
+        col_prev1, col_prev2 = st.columns([1, 2])
+        with col_prev1:
+            st.image(uploaded_path, caption="📷 Ready to Analyze", width=140)
+        with col_prev2:
+            st.markdown(f"**Attached:** `{uploaded_photo.name}`")
+            st.caption("Click button below or type a query to identify location, read signs & discover nearest landmarks.")
+            if st.button("🔍 Identify Location & Nearest Landmarks", use_container_width=True):
+                st.session_state.active_query = "Identify this campus photo, read any visible signage, and tell me the nearest landmarks."
 
     # Chat Input Box
-    query_input = st.chat_input("Ask about buildings, floors, food stalls, routes, or request illustrations...")
+    query_input = st.chat_input("Ask about buildings, floors, food stalls, routes, or upload a photo...")
 
     if "active_query" in st.session_state and st.session_state.active_query:
         query_input = st.session_state.active_query
@@ -481,11 +545,19 @@ with col_chat:
 
     if query_input:
         # Append User Message
-        st.session_state.messages.append({"role": "user", "content": query_input})
+        st.session_state.messages.append({
+            "role": "user",
+            "content": query_input,
+            "uploaded_image": uploaded_path
+        })
 
         # Process Query with Multimodal Assistant Engine
-        with st.spinner("Processing campus query..."):
-            resp = assistant.process_query(query_input, uploaded_image=uploaded_name)
+        with st.spinner("Analyzing with Gemini Vision & Multimodal Campus Engine..."):
+            resp = assistant.process_query(
+                query_input,
+                uploaded_image=uploaded_path,
+                api_key=st.session_state.get("gemini_api_key")
+            )
 
         if resp.get("route_result"):
             st.session_state.last_route = resp["route_result"]
@@ -523,11 +595,11 @@ with col_output:
     )
     st.plotly_chart(plotly_fig, use_container_width=True, config={"displayModeBar": False})
 
-    # Output Card 1: Turn-by-Turn Guidance if route is active
+    # Output Card 1: Turn-by-Turn Guidance if route is active (Distance removed)
     if st.session_state.last_route and st.session_state.last_route.get("success"):
         r_data = st.session_state.last_route
         with st.container():
-            st.markdown(f"##### 🚶 Verified Route Guidance (~{r_data['total_distance_m']}m walking distance)")
+            st.markdown("##### 🚶 Verified Route Guidance")
             for s in r_data.get("steps", []):
                 landmark_info = f" • *Landmark: {s['landmark']}*" if s.get('landmark') else ""
                 vertical_info = " 🛗 [Elevator/Stairs]" if s.get('is_vertical') else ""
