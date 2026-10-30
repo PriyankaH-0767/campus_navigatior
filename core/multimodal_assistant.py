@@ -89,20 +89,14 @@ class CampusAssistant:
         extracted_source = None
         extracted_dest = None
 
-        # Pattern: "I am in/at [Source] ... how do I reach [Dest]"
-        match_source = re.search(r'\bi am (?:in|at|near)\s+([a-zA-Z0-9\s\'\-]+?)(?:\.|\,|\;|\?|\s+how|\s+guide|$)', q_low)
-        if match_source:
-            cand = match_source.group(1).strip()
-            res = self.nav_graph.resolve_location_id(cand)
-            if res:
-                extracted_source = res
-                self.session_source = res
+        # Clean ancillary landmark phrases for entity matching
+        clean_q = re.sub(r'\b(using|with|via)\s+landmarks\b', '', q_low).strip()
 
-        # Pattern: "From [Source] guide me to [Dest]" or "From [Source] to [Dest]"
-        match_from_to = re.search(r'\bfrom\s+([a-zA-Z0-9\s\'\-]+?)\s+(?:guide me to|to|how do i reach)\s+([a-zA-Z0-9\s\'\-]+)', q_low)
+        # 1. Pattern: "From [Source] (,|.)? guide me to/to [Dest]"
+        match_from_to = re.search(r'\bfrom\s+(?:the\s+)?([a-zA-Z0-9\s\'\-]+?)(?:,|\.|\;)?\s+(?:guide me to|to|how do i reach|how to reach)\s+(?:the\s+)?([a-zA-Z0-9\s\'\-]+)', clean_q)
         if match_from_to:
             s_cand = match_from_to.group(1).strip()
-            d_cand = match_from_to.group(2).strip()
+            d_cand = match_from_to.group(2).strip().rstrip("?.")
             s_res = self.nav_graph.resolve_location_id(s_cand)
             d_res = self.nav_graph.resolve_location_id(d_cand)
             if s_res:
@@ -110,10 +104,38 @@ class CampusAssistant:
                 self.session_source = s_res
             if d_res:
                 extracted_dest = d_res
+            elif d_cand:
+                extracted_dest = d_cand
 
-        # Pattern: "how do I reach [Dest]"
+        # 2. Pattern: "I am/I'm in/at/near [Source] (,|.)? guide me to/how do I reach [Dest]"
+        if not extracted_dest or not extracted_source:
+            match_iam_to = re.search(r'\b(?:i am|i\'m)\s+(?:in|at|near)\s+(?:the\s+)?([a-zA-Z0-9\s\'\-]+?)(?:,|\.|\;)?\s+(?:guide me to|to|how do i reach|how to reach)\s+(?:the\s+)?([a-zA-Z0-9\s\'\-]+)', clean_q)
+            if match_iam_to:
+                s_cand = match_iam_to.group(1).strip()
+                d_cand = match_iam_to.group(2).strip().rstrip("?.")
+                s_res = self.nav_graph.resolve_location_id(s_cand)
+                d_res = self.nav_graph.resolve_location_id(d_cand)
+                if s_res:
+                    extracted_source = s_res
+                    self.session_source = s_res
+                if d_res:
+                    extracted_dest = d_res
+                elif d_cand:
+                    extracted_dest = d_cand
+
+        # 3. Pattern: Standalone source: "I am in/at/near [Source]"
+        if not extracted_source:
+            match_source = re.search(r'\b(?:i am|i\'m)\s+(?:in|at|near)\s+(?:the\s+)?([a-zA-Z0-9\s\'\-]+?)(?:\.|\,|\;|\?|\s+how|\s+guide|$)', clean_q)
+            if match_source:
+                cand = match_source.group(1).strip()
+                res = self.nav_graph.resolve_location_id(cand)
+                if res:
+                    extracted_source = res
+                    self.session_source = res
+
+        # 4. Pattern: Standalone destination: "how do I reach [Dest]" / "guide me to [Dest]"
         if not extracted_dest:
-            match_dest = re.search(r'(?:how do i reach|how to reach|how to go to|guide me to|way to)\s+([a-zA-Z0-9\s\'\-]+)', q_low)
+            match_dest = re.search(r'(?:how do i reach|how to reach|how to go to|guide me to|way to)\s+(?:the\s+)?([a-zA-Z0-9\s\'\-]+)', clean_q)
             if match_dest:
                 d_cand = match_dest.group(1).strip().rstrip("?.")
                 d_res = self.nav_graph.resolve_location_id(d_cand)
