@@ -191,7 +191,9 @@ with tab_chat:
                     st.markdown(" ".join([f"`{c}`" for c in msg["citations"]]))
                 if msg.get("route_svg"):
                     st.markdown(msg["route_svg"], unsafe_allow_html=True)
-                if msg.get("illustration"):
+                if msg.get("generated_image_path") and os.path.exists(msg["generated_image_path"]):
+                    st.image(msg["generated_image_path"], caption="🎨 Diffusion Generated Illustrative Visual Guide (Conceptual Visual Aid)", use_container_width=True)
+                elif msg.get("illustration") and "svg_data" in msg["illustration"]:
                     st.markdown(msg["illustration"]["svg_data"], unsafe_allow_html=True)
 
         # File Uploader for Multimodal Input
@@ -223,7 +225,8 @@ with tab_chat:
                 "content": resp["answer"],
                 "citations": resp.get("citations", []),
                 "route_svg": resp.get("route_diagram_svg"),
-                "illustration": resp.get("visual_illustration")
+                "illustration": resp.get("visual_illustration"),
+                "generated_image_path": resp.get("generated_image_path")
             })
             st.rerun()
 

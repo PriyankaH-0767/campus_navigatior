@@ -143,3 +143,4 @@ def generate_images_pdf(filepath="data/campus_images.pdf"):
 if __name__ == "__main__":
     generate_directions_pdf()
     generate_images_pdf()
+

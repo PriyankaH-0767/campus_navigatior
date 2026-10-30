@@ -76,3 +76,4 @@ class VLMEngine:
             "grounded": True,
             "source_citation": f"[{rec.get('source_file', 'campus_images.pdf')}, Page {rec.get('source_page', 1)}]"
         }
+

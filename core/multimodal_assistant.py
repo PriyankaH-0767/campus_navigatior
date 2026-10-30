@@ -236,13 +236,15 @@ class CampusAssistant:
             )
             return response_payload
 
-        # Branch 4: Visual Scene Generation
+        # Branch 4: Visual Scene Generation (Diffusion Model)
         elif intent == "GEN_ILLUSTRATION":
             gen_res = self.visual_gen.generate_illustration(query)
             response_payload["visual_illustration"] = gen_res
+            response_payload["generated_image_path"] = gen_res.get("image_path")
             response_payload["answer"] = (
-                f"🎨 **Generated Visual Guide:** {gen_res['scene_title']}.\n\n"
-                f"⚠️ *Mandatory Notice: {gen_res['disclaimer']}*"
+                f"🎨 **Generated Visual Guide ({gen_res.get('model_type', 'Diffusion Model')}):** {gen_res['scene_title']}.\n\n"
+                f"📝 **Diffusion Prompt:** *\"{gen_res.get('diffusion_prompt', query)}\"*\n\n"
+                f"{gen_res['disclaimer']}"
             )
             return response_payload
 

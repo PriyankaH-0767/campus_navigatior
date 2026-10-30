@@ -10,3 +10,4 @@ if (-Not (Test-Path $pythonExe)) {
 }
 
 & .venv\Scripts\streamlit.exe run app.py
+

@@ -171,3 +171,4 @@ When presenting this project to your evaluators, highlight these core principles
 
 4. **Why are generated illustrations watermarked?**
    - Diffusion and generative models invent plausible-looking scenes that do not conform to real architectural layouts. To prevent safety hazards, conceptual illustrations carry a mandatory safety watermark, while topological navigation diagrams are rendered deterministically from the graph.
+
