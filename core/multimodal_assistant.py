@@ -179,10 +179,10 @@ class CampusAssistant:
                 return response_payload
 
             # Check if destination is ambiguous (e.g. MBA)
-            if "mba" == str(dest).lower().strip():
+            if "mba" in query.lower() and "dean" not in query.lower():
                 response_payload["answer"] = (
                     f"I note your starting location is **{self.nav_graph.graph.nodes.get(source, {}).get('name', source)}**, "
-                    f"but '{dest}' is ambiguous (could refer to the Dean Office of MBA Department in the Admin complex or specific lecture halls). "
+                    f"but 'MBA' is ambiguous (could refer to the Dean Office of MBA Department in the Admin complex or specific lecture halls). "
                     f"Could you please clarify if you mean the **Dean Office of MBA Department**?"
                 )
                 response_payload["evidence_grounded"] = False
